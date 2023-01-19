@@ -26,7 +26,7 @@
     <dependency>
       <groupId>com.teragrep</groupId>
       <artifactId>blf_01</artifactId>
-      <version>1.1.0</version>
+      <version>1.1.1</version>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -125,6 +125,7 @@
             <exclude>.github/workflows/*.yml</exclude>
             <exclude>toolchains.xml</exclude>
             <exclude>settings.xml</exclude>
+            <exclude>dependencies.settings.xml</exclude>
             <!-- readme -->
             <exclude>README.adoc</exclude>
             <exclude>README.md</exclude>

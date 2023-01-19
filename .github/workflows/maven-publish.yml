@@ -28,6 +28,6 @@ jobs:
       run: echo "RELEASE_VERSION=$(git describe --tags)" >> $GITHUB_ENV
 
     - name: Publish to GitHub Packages Apache Maven
-      run: mvn -B -Drevision=${{ env.RELEASE_VERSION }} -Dsha1= -Dchangelist= deploy -s ${{ github.workspace }}/settings.xml
+      run: mvn -B -Drevision=${{ env.RELEASE_VERSION }} -Dsha1= -Dchangelist= deploy -s dependencies.settings.xml
       env:
         GITHUB_TOKEN: ${{ github.token }}
