@@ -9,23 +9,27 @@
     <profile>
       <id>github-packages</id>
       <repositories>
+        <!-- general dependencies - explicitly set for efficiency reasons -->
+        <repository>
+          <id>central</id>
+          <url>https://repo1.maven.org/maven2</url>
+        </repository>
+        <!-- dependencies -->
         <repository>
           <id>blf_01</id>
           <url>https://maven.pkg.github.com/teragrep/blf_01</url>
-        </repository>
-        <repository>
-          <id>github</id>
-          <url>https://maven.pkg.github.com/${env.GITHUB_REPOSITORY}</url>
         </repository>
       </repositories>
     </profile>
   </profiles>
   <servers>
+    <!-- dependencies -->
     <server>
       <id>blf_01</id>
       <username>${env.GITHUB_ACTOR}</username>
       <password>${env.GITHUB_TOKEN}</password>
     </server>
+    <!-- for uploading -->
     <server>
       <id>github</id>
       <username>${env.GITHUB_ACTOR}</username>
