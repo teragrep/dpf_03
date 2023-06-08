@@ -41,8 +41,7 @@
     <dependency>
       <groupId>com.teragrep</groupId>
       <artifactId>blf_01</artifactId>
-      <!-- FIXME - not released in maven central yet -->
-      <version>1.1.1</version>
+      <version>1.1.2</version>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
