@@ -2,7 +2,7 @@ package com.teragrep.functions.dpf_03;
 
 /*
  * Teragrep Tokenizer DPF-03
- * Copyright (C) 2019, 2020, 2021, 2022, 2023  Suomen Kanuuna Oy
+ * Copyright (C) 2019, 2020, 2021, 2022  Suomen Kanuuna Oy
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -47,8 +47,8 @@ package com.teragrep.functions.dpf_03;
  */
 
 import java.io.Serializable;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.teragrep.blf_01.tokenizer.Tokenizer;
 import org.apache.spark.sql.Encoder;
@@ -57,7 +57,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.expressions.Aggregator;
 
 
-public class TokenAggregator extends Aggregator<Row, TokenBuffer, Set<String>> implements Serializable {
+public class TokenAggregator extends Aggregator<Row, TokenBuffer, List<String>> implements Serializable {
 
     private final String column;
 
@@ -89,8 +89,8 @@ public class TokenAggregator extends Aggregator<Row, TokenBuffer, Set<String>> i
     }
 
     @Override
-    public Set<String> finish(TokenBuffer reduction) {
-	    return new HashSet<>(reduction.getMap().keySet());
+    public List<String> finish(TokenBuffer reduction) {
+	    return new ArrayList<>(reduction.getMap().keySet());
     }
 
     @Override
@@ -100,7 +100,7 @@ public class TokenAggregator extends Aggregator<Row, TokenBuffer, Set<String>> i
 
     @Override
     public Encoder outputEncoder() {
-	    Set<String> stringSet = new HashSet<>();
-        return Encoders.kryo(stringSet.getClass());
+	    List<String> stringList = new ArrayList<>();
+        return Encoders.kryo(stringList.getClass());
     }
 }
