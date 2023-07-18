@@ -36,6 +36,12 @@
       <organization>Teragrep</organization>
       <organizationUrl>https://teragrep.com</organizationUrl>
     </developer>
+    <developer>
+      <name>Ville Manninen</name>
+      <email>49@teragrep.com</email>
+      <organization>Teragrep</organization>
+      <organizationUrl>https://teragrep.com</organizationUrl>
+    </developer>
   </developers>
   <dependencies>
     <dependency>
@@ -89,7 +95,7 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.12</version>
+      <version>4.13.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -102,6 +108,26 @@
   <build>
     <directory>${project.basedir}/target</directory>
     <plugins>
+      <plugin>
+        <!-- see http://davidb.github.com/scala-maven-plugin -->
+        <groupId>net.alchim31.maven</groupId>
+        <artifactId>scala-maven-plugin</artifactId>
+        <version>4.8.1</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+              <goal>testCompile</goal>
+            </goals>
+            <configuration>
+              <args>
+                <arg>-dependencyfile</arg>
+                <arg>${project.build.directory}/.scala_dependencies</arg>
+              </args>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
