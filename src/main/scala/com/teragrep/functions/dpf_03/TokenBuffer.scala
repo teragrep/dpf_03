@@ -1,5 +1,3 @@
-package com.teragrep.functions.dpf_03
-
 /*
  * Teragrep Tokenizer DPF-03
  * Copyright (C) 2019, 2020, 2021, 2022, 2023  Suomen Kanuuna Oy
@@ -45,6 +43,8 @@ package com.teragrep.functions.dpf_03
  * Teragrep, the applicable Commercial License may apply to this file if you as
  * a licensee so wish it.
  */
+
+package com.teragrep.functions.dpf_03
 
 import scala.collection.mutable
 
