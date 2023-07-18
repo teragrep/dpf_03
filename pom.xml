@@ -115,6 +115,8 @@
         <version>4.8.1</version>
         <executions>
           <execution>
+            <!-- this is so we don't end with a compile error in maven-compiler-plugin -->
+            <phase>process-sources</phase>
             <goals>
               <goal>compile</goal>
               <goal>testCompile</goal>
@@ -125,6 +127,12 @@
                 <arg>${project.build.directory}/.scala_dependencies</arg>
               </args>
             </configuration>
+          </execution>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>doc-jar</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>
