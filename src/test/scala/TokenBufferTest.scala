@@ -44,29 +44,29 @@
  * a licensee so wish it.
  */
 
-package com.teragrep.functions.dpf_03
+import com.teragrep.blf_01.Tokenizer
+import com.teragrep.functions.dpf_03.TokenBuffer
 
-import scala.collection.mutable
-import com.teragrep.blf_01.Token
+import java.io.{ByteArrayInputStream, InputStream}
+import java.nio.charset.StandardCharsets
 
-class TokenBuffer() {
+class TokenBufferTest {
 
-  private var hashMap: mutable.HashMap[Token, Int] = mutable.HashMap[Token, Int]()
+  @org.junit.jupiter.api.Test
+  def testNoDuplicateKeys(): Unit = {
 
-  def getBuffer: mutable.HashMap[Token, Int] = hashMap
+    val tokenizer: Tokenizer = new Tokenizer
 
-  def mergeBuffer(other: mutable.HashMap[Token, Int]): Unit ={
-    hashMap = hashMap ++ other
+    val tokenBuffer: TokenBuffer = new TokenBuffer
+
+    val input: String = "one,one"
+
+    val is: InputStream = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8))
+
+    tokenizer.tokenize(is).forEach(token => tokenBuffer.addKey(token))
+
+    // "one" and ","
+    assert(tokenBuffer.getSize == 2)
+
   }
-
-  def getSize: Int = hashMap.size
-
-  def addKey(key: Token): Unit = {
-    hashMap.put(key, 1)
-  }
-
-  override def toString: String =
-    s"""Buffer{
-       |map=$hashMap
-       |}""".stripMargin
 }

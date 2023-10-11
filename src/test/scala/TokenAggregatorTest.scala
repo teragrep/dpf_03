@@ -49,14 +49,25 @@ import com.teragrep.functions.dpf_03.TokenBuffer
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
-import org.apache.spark.sql.{Dataset, Row, RowFactory, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, RowFactory, SparkSession}
 import org.apache.spark.sql.types.{DataTypes, MetadataBuilder, StructField, StructType}
+import org.junit.Assert.assertEquals
 
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
+import java.util
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 class TokenAggregatorTest {
+  val exampleString: String = "NetScreen row=[Root]system-notification-00257" +
+    "(traffic\uD83D\uDE41 start_time=\"2022-09-02 10:13:40\"" +
+    " duration=0 policy_id=320000 service=tcp/port:8151 proto=6" +
+    " src zone=Null dst zone=Null action=Deny sent=0 rcvd=40" +
+    " src=127.127.127.127 dst=127.0.0.1 src_port=52362" +
+    " dst_port=8151 session_id=0 reason=Traffic Denied"
+
+  val amount: Long = 10
 
   val testSchema: StructType = new StructType(
     Array[StructField]
@@ -75,9 +86,9 @@ class TokenAggregatorTest {
     val sparkSession = SparkSession.builder.master("local[*]").getOrCreate
     val sqlContext = sparkSession.sqlContext
     sparkSession.sparkContext.setLogLevel("ERROR")
-
     val encoder = RowEncoder.apply(testSchema)
     val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
+
     var rowDataset = rowMemoryStream.toDF
 
     val tokenAggregator = new TokenAggregator("_raw")
@@ -94,57 +105,52 @@ class TokenAggregatorTest {
     while (streamingQuery.isActive) {
       val time = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.now, ZoneOffset.UTC))
       rowMemoryStream.addData(
-        makeRows(time, String.valueOf(run), 10))
+        makeRows(time, String.valueOf(run)))
 
       run += 1
 
       if (run == 10) {
         streamingQuery.processAllAvailable
-        sparkSession.sql("SELECT * FROM TokenAggregatorQuery").show(100)
         streamingQuery.stop
+        streamingQuery.awaitTermination()
       }
     }
+
+    val finalResult = sqlContext.sql("SELECT tokens FROM TokenAggregatorQuery").collectAsList()
+    println(finalResult.size())
+    println(finalResult)
   }
 
-  @org.junit.jupiter.api.Test
-  def testTokenBuffer(): Unit = {
-    val buffer1 = new TokenBuffer
-    val buffer2 = new TokenBuffer
-
-    // Test no duplicates
-    buffer1.addKey("one")
-    buffer1.addKey("one")
-
-    buffer2.addKey("two")
-    buffer2.addKey("three")
-
-    assert(buffer1.getSize == 1)
-
-    buffer1.mergeBuffer(buffer2.getBuffer)
-    assert(buffer1.getSize == 3)
-
-  }
-
-  private def makeRows(time: Timestamp, partition: String, amount: Long): Seq[Row] = {
+  private def makeRows(time: Timestamp, partition: String): Seq[Row] = {
 
     val rowList: ArrayBuffer[Row] = new ArrayBuffer[Row]
+    val rowData = generateRawData()
 
-    val row = RowFactory.create(
-      time,
-      "data Data",
-      "topic",
-      "stream",
-      "host",
-      "input",
-      partition,
-      "0L")
+    for (i <- 0 until amount.toInt) {
+      val row = RowFactory.create(time,
+        exampleString,
+        "topic",
+        "stream",
+        "host",
+        "input",
+        partition,
+        "0L")
 
-    var temp = amount
-    while (temp > 0) {
       rowList += row
-      temp -= 1
     }
     rowList
+  }
+
+  private def generateRawData(): Array[String] = {
+    val testDataList = new Array[String](amount.toInt)
+
+    for (i <- testDataList.indices) {
+      val randomVal = Math.floor(Math.random() * 999)
+      val text = "ip=172.17.255."+randomVal+",port=8080,session_id=46889"
+      testDataList.update(i, text)
+
+    }
+    testDataList
   }
 
   private def startStream(rowDataset: Dataset[Row]): StreamingQuery =
