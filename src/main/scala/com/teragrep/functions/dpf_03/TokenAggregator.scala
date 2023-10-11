@@ -51,6 +51,7 @@ import com.teragrep.blf_01.Tokenizer
 import org.apache.spark.sql.{Encoder, Encoders, Row}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.Aggregator
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.nio.charset.StandardCharsets
 import scala.reflect.ClassTag
@@ -58,13 +59,17 @@ import scala.reflect.ClassTag
 class TokenAggregator(private final val columnName: String) extends Aggregator[Row, TokenBuffer, Set[String]]
   with Serializable {
 
-  override def zero(): TokenBuffer = new TokenBuffer()
+  var tokenizer: Option[Tokenizer] = None
+
+  override def zero(): TokenBuffer = {
+    tokenizer = Some(new Tokenizer(32))
+    new TokenBuffer()
+  }
 
   override def reduce(b: TokenBuffer, a: Row): TokenBuffer = {
-    val tokenizer: Tokenizer = new Tokenizer;
-    val input: String = a.getAs(columnName).toString
-    val stream = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8))
-    tokenizer.tokenize(stream).forEach(token => b.addKey(token))
+    val input = a.getAs[String](columnName).getBytes(StandardCharsets.UTF_8)
+    val stream = new ByteArrayInputStream(input)
+    tokenizer.get.tokenize(stream).forEach(token => b.addKey(token))
     b
   }
 
