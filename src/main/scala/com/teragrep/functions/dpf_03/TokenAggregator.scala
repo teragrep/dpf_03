@@ -46,21 +46,30 @@
 
 package com.teragrep.functions.dpf_03
 
-import java.io.Serializable
-import com.teragrep.blf_01.tokenizer.Tokenizer
+import java.io.{ByteArrayInputStream, Serializable}
+import com.teragrep.blf_01.Tokenizer
 import org.apache.spark.sql.{Encoder, Encoders, Row}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.Aggregator
+import org.apache.spark.unsafe.types.UTF8String
+
+import java.nio.charset.StandardCharsets
 import scala.reflect.ClassTag
 
 class TokenAggregator(private final val columnName: String) extends Aggregator[Row, TokenBuffer, Set[String]]
   with Serializable {
 
-  override def zero(): TokenBuffer = new TokenBuffer()
+  var tokenizer: Option[Tokenizer] = None
+
+  override def zero(): TokenBuffer = {
+    tokenizer = Some(new Tokenizer(32))
+    new TokenBuffer()
+  }
 
   override def reduce(b: TokenBuffer, a: Row): TokenBuffer = {
-    val input: String = a.getAs(columnName).toString
-    Tokenizer.tokenize(input).forEach(i => b.addKey(i))
+    val input = a.getAs[String](columnName).getBytes(StandardCharsets.UTF_8)
+    val stream = new ByteArrayInputStream(input)
+    tokenizer.get.tokenize(stream).forEach(token => b.addKey(token))
     b
   }
 
@@ -70,7 +79,7 @@ class TokenAggregator(private final val columnName: String) extends Aggregator[R
   }
 
   override def finish(reduction: TokenBuffer): Set[String] = {
-    reduction.getBuffer.keySet.toSet
+    reduction.getBuffer.keySet.map(token => token.toString).toSet
   }
 
   override def bufferEncoder: Encoder[TokenBuffer] = customKryoEncoder[TokenBuffer]
