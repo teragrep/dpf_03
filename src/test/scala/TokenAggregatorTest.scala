@@ -91,7 +91,7 @@ class TokenAggregatorTest {
 
     var rowDataset = rowMemoryStream.toDF
 
-    val tokenAggregator = new TokenAggregator("_raw")
+    val tokenAggregator = new TokenAggregator("_raw", 32)
     val tokenAggregatorColumn = tokenAggregator.toColumn
 
     rowDataset = rowDataset
