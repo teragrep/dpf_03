@@ -56,13 +56,13 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.nio.charset.StandardCharsets
 import scala.reflect.ClassTag
 
-class TokenAggregator(private final val columnName: String) extends Aggregator[Row, TokenBuffer, Set[String]]
+class TokenAggregator(final val columnName: String, final val maxMinorTokens: Long) extends Aggregator[Row, TokenBuffer, Set[String]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
 
   override def zero(): TokenBuffer = {
-    tokenizer = Some(new Tokenizer(32))
+    tokenizer = Some(new Tokenizer(maxMinorTokens))
     new TokenBuffer()
   }
 
