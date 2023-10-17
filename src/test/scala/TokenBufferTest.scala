@@ -46,6 +46,7 @@
 
 import com.teragrep.blf_01.Tokenizer
 import com.teragrep.functions.dpf_03.TokenBuffer
+import org.junit.Assert.{assertEquals, assertTrue}
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.nio.charset.StandardCharsets
@@ -53,20 +54,48 @@ import java.nio.charset.StandardCharsets
 class TokenBufferTest {
 
   @org.junit.jupiter.api.Test
-  def testNoDuplicateKeys(): Unit = {
+  def testGetSize(): Unit = {
 
     val tokenizer: Tokenizer = new Tokenizer
 
     val tokenBuffer: TokenBuffer = new TokenBuffer
 
-    val input: String = "one,one"
+    val input: String = "a.b"
 
     val is: InputStream = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8))
 
     tokenizer.tokenize(is).forEach(token => tokenBuffer.addKey(token))
 
-    // "one" and ","
-    assert(tokenBuffer.getSize == 2)
+    assertEquals(7, tokenBuffer.getSize)
 
   }
+
+  @org.junit.jupiter.api.Test
+  def testFilterPool(): Unit = {
+
+    val tokenizer: Tokenizer = new Tokenizer
+
+    val tokenBuffer: TokenBuffer = new TokenBuffer
+
+    val input: String = "a.b"
+
+    val is: InputStream = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8))
+
+    tokenizer.tokenize(is).forEach(token => tokenBuffer.addKey(token))
+
+    val smallFilter = tokenBuffer.getBuffer(100000)
+    val mediumFilter = tokenBuffer.getBuffer(1000000)
+    val largeFilter = tokenBuffer.getBuffer(2500000)
+
+    assertTrue(smallFilter.mightContain("a"))
+    assertTrue(smallFilter.mightContain("a."))
+    assertTrue(smallFilter.mightContain("a.b"))
+    assertTrue(smallFilter.mightContain(".b"))
+    assertTrue(smallFilter.mightContain("."))
+
+    assertTrue(mediumFilter.mightContain("a"))
+    assertTrue(largeFilter.mightContain("a"))
+
+  }
+
 }

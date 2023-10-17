@@ -48,25 +48,41 @@ package com.teragrep.functions.dpf_03
 
 import scala.collection.mutable
 import com.teragrep.blf_01.Token
+import org.apache.spark.util.sketch.BloomFilter
 
 class TokenBuffer() {
+  private var count: Int = 0
 
-  private var hashMap: mutable.HashMap[Token, Int] = mutable.HashMap[Token, Int]()
+  private var filterPool: mutable.HashMap[Int, BloomFilter] =
+    mutable.HashMap[Int, BloomFilter](
+      100000 -> BloomFilter.create(100000, 0.01),
+      1000000 -> BloomFilter.create(1000000, 0.03),
+      2500000 -> BloomFilter.create(2500000, 0.05))
 
-  def getBuffer: mutable.HashMap[Token, Int] = hashMap
 
-  def mergeBuffer(other: mutable.HashMap[Token, Int]): Unit ={
-    hashMap = hashMap ++ other
+  def getBuffer: mutable.HashMap[Int, BloomFilter] = filterPool
+
+  def mergeBuffer(other: mutable.HashMap[Int, BloomFilter]): Unit ={
+    for ((k, v) <- filterPool) {
+      val option: Option[BloomFilter] = other.get(k)
+      if (option.isDefined) {
+        v.mergeInPlace(option.get)
+      }
+    }
   }
 
-  def getSize: Int = hashMap.size
+  def getSize: Int = count
 
   def addKey(key: Token): Unit = {
-    hashMap.put(key, 1)
+    count += 1
+
+    for((k,v ) <- filterPool) {
+      v.put(key.toString)
+    }
   }
 
   override def toString: String =
     s"""Buffer{
-       |map=$hashMap
+       |map=$filterPool
        |}""".stripMargin
 }

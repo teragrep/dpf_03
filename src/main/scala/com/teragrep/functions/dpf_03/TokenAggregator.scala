@@ -46,17 +46,18 @@
 
 package com.teragrep.functions.dpf_03
 
-import java.io.{ByteArrayInputStream, Serializable}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, Serializable}
 import com.teragrep.blf_01.Tokenizer
 import org.apache.spark.sql.{Encoder, Encoders, Row}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.Aggregator
-import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.util.sketch.BloomFilter
 
 import java.nio.charset.StandardCharsets
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
-class TokenAggregator(final val columnName: String, final val maxMinorTokens: Long) extends Aggregator[Row, TokenBuffer, Set[String]]
+class TokenAggregator(final val columnName: String, final val maxMinorTokens: Long) extends Aggregator[Row, TokenBuffer, mutable.HashMap[Int, Array[Byte]]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
@@ -78,13 +79,32 @@ class TokenAggregator(final val columnName: String, final val maxMinorTokens: Lo
     b1
   }
 
-  override def finish(reduction: TokenBuffer): Set[String] = {
-    reduction.getBuffer.keySet.map(token => token.toString).toSet
+  override def finish(reduction: TokenBuffer): mutable.HashMap[Int, Array[Byte]] = {
+    val inputSize = reduction.getSize
+    val map: mutable.HashMap[Int, Array[Byte]] = mutable.HashMap[Int, Array[Byte]]()
+
+    if (inputSize <= 100000) {
+      val baos: ByteArrayOutputStream = new ByteArrayOutputStream
+      reduction.getBuffer(100000).writeTo(baos)
+      map.put(100000, baos.toByteArray)
+    }
+    else if (inputSize <= 1000000) {
+      val baos: ByteArrayOutputStream = new ByteArrayOutputStream
+      reduction.getBuffer(1000000).writeTo(baos)
+      map.put(1000000, baos.toByteArray)
+    }
+    else {
+      val baos: ByteArrayOutputStream = new ByteArrayOutputStream
+      reduction.getBuffer(2500000).writeTo(baos)
+      map.put(2500000, baos.toByteArray)
+    }
+
+    map
   }
 
   override def bufferEncoder: Encoder[TokenBuffer] = customKryoEncoder[TokenBuffer]
 
-  override def outputEncoder: Encoder[Set[String]] = ExpressionEncoder[Set[String]]
+  override def outputEncoder: Encoder[mutable.HashMap[Int, Array[Byte]]] = ExpressionEncoder[mutable.HashMap[Int, Array[Byte]]]
 
   implicit def customKryoEncoder[A](implicit ct: ClassTag[A]): Encoder[A] = Encoders.kryo[A](ct)
 }
