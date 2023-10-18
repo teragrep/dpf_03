@@ -51,7 +51,6 @@ import com.teragrep.blf_01.Tokenizer
 import org.apache.spark.sql.{Encoder, Encoders, Row}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.Aggregator
-import org.apache.spark.util.sketch.BloomFilter
 
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
@@ -86,17 +85,17 @@ class TokenAggregator(final val columnName: String, final val maxMinorTokens: Lo
     if (inputSize <= 100000) {
       val baos: ByteArrayOutputStream = new ByteArrayOutputStream
       reduction.getBuffer(100000).writeTo(baos)
-      map.put(100000, baos.toByteArray)
+      map.put(inputSize, baos.toByteArray)
     }
     else if (inputSize <= 1000000) {
       val baos: ByteArrayOutputStream = new ByteArrayOutputStream
       reduction.getBuffer(1000000).writeTo(baos)
-      map.put(1000000, baos.toByteArray)
+      map.put(inputSize, baos.toByteArray)
     }
     else {
       val baos: ByteArrayOutputStream = new ByteArrayOutputStream
       reduction.getBuffer(2500000).writeTo(baos)
-      map.put(2500000, baos.toByteArray)
+      map.put(inputSize, baos.toByteArray)
     }
 
     map

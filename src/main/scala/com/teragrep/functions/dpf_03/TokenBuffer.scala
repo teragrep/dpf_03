@@ -53,7 +53,7 @@ import org.apache.spark.util.sketch.BloomFilter
 class TokenBuffer() {
   private var count: Int = 0
 
-  private var filterPool: mutable.HashMap[Int, BloomFilter] =
+  private val filterPool: mutable.HashMap[Int, BloomFilter] =
     mutable.HashMap[Int, BloomFilter](
       100000 -> BloomFilter.create(100000, 0.01),
       1000000 -> BloomFilter.create(1000000, 0.03),
