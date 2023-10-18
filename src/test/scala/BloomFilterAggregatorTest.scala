@@ -44,8 +44,8 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.functions.dpf_03.TokenAggregator
-import com.teragrep.functions.dpf_03.TokenBuffer
+import com.teragrep.functions.dpf_03.BloomFilterAggregator
+import com.teragrep.functions.dpf_03.BloomFilterBuffer
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
@@ -59,7 +59,7 @@ import java.util
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class TokenAggregatorTest {
+class BloomFilterAggregatorTest {
   val exampleString: String = "NetScreen row=[Root]system-notification-00257" +
     "(traffic\uD83D\uDE41 start_time=\"2022-09-02 10:13:40\"" +
     " duration=0 policy_id=320000 service=tcp/port:8151 proto=6" +
@@ -91,13 +91,13 @@ class TokenAggregatorTest {
 
     var rowDataset = rowMemoryStream.toDF
 
-    val tokenAggregator = new TokenAggregator("_raw", 32)
+    val tokenAggregator = new BloomFilterAggregator("_raw", 32, Map(50000L -> 0.01))
     val tokenAggregatorColumn = tokenAggregator.toColumn
 
     rowDataset = rowDataset
       .groupBy("partition")
       .agg(tokenAggregatorColumn)
-      .withColumnRenamed("TokenAggregator(org.apache.spark.sql.Row)", "tokens")
+      .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
 
     val streamingQuery = startStream(rowDataset)
     var run: Long = 0
@@ -116,7 +116,7 @@ class TokenAggregatorTest {
       }
     }
 
-    val finalResult = sqlContext.sql("SELECT tokens FROM TokenAggregatorQuery").collectAsList()
+    val finalResult = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collectAsList()
     println(finalResult.size())
     println(finalResult)
   }

@@ -44,29 +44,53 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.blf_01.Tokenizer
-import com.teragrep.functions.dpf_03.TokenBuffer
+import com.teragrep.functions.dpf_03.BloomFilterAggregator
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.util.sketch.BloomFilter
 
-import java.io.{ByteArrayInputStream, InputStream}
-import java.nio.charset.StandardCharsets
+import java.io.ByteArrayInputStream
 
-class TokenBufferTest {
+class BloomFilterBufferTest {
 
   @org.junit.jupiter.api.Test
   def testNoDuplicateKeys(): Unit = {
 
-    val tokenizer: Tokenizer = new Tokenizer
+    // TODO test other sizes / size categorization
+    val sizeSplit = Map(50000L -> 0.01D)
 
-    val tokenBuffer: TokenBuffer = new TokenBuffer
+    val expectedBfBitSize = {
+      val size = sizeSplit.keys.max
+      val fpp = sizeSplit(size)
+      val bf = BloomFilter.create(size, fpp)
+      bf.bitSize()
+    }
 
     val input: String = "one,one"
 
-    val is: InputStream = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8))
 
-    tokenizer.tokenize(is).forEach(token => tokenBuffer.addKey(token))
+    val columnName = "column1";
+
+    val schema = StructType(Seq(StructField(columnName, StringType)))
+    val row = new GenericRowWithSchema(Array(input), schema)
+
+    val bfAgg : BloomFilterAggregator = new BloomFilterAggregator(columnName, 32, sizeSplit)
+
+    val bfAggBuf = bfAgg.zero()
+    bfAgg.reduce(bfAggBuf, row)
+
+    // TODO test merge
+
+    val outArr : Array[Byte] = bfAgg.finish(bfAggBuf)
+
+    val bios = new ByteArrayInputStream(outArr)
+
+    val bf = BloomFilter.readFrom(bios)
 
     // "one" and ","
-    assert(tokenBuffer.getSize == 2)
-
+    assert(bf.mightContain("one"))
+    assert(bf.mightContain(","))
+    assert(bf.bitSize() == expectedBfBitSize)
   }
+
 }

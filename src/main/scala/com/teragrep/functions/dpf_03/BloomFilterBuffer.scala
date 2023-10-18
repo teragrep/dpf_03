@@ -47,26 +47,25 @@
 package com.teragrep.functions.dpf_03
 
 import scala.collection.mutable
-import com.teragrep.blf_01.Token
+import org.apache.spark.util.sketch.BloomFilter
 
-class TokenBuffer() {
+import java.io.ByteArrayOutputStream
 
-  private var hashMap: mutable.HashMap[Token, Int] = mutable.HashMap[Token, Int]()
+class BloomFilterBuffer(final val sizeSplit: Map[Long, Double]) {
 
-  def getBuffer: mutable.HashMap[Token, Int] = hashMap
+  val sizeToBloomFilterMap: mutable.HashMap[Long, Array[Byte]] = {
+    val rv = mutable.HashMap[Long, Array[Byte]]()
 
-  def mergeBuffer(other: mutable.HashMap[Token, Int]): Unit ={
-    hashMap = hashMap ++ other
+    for ((size, fpp) <- sizeSplit) {
+
+      val bf: BloomFilter = BloomFilter.create(size, fpp)
+
+      val baos: ByteArrayOutputStream = new ByteArrayOutputStream()
+
+      bf.writeTo(baos)
+      rv.put(size, baos.toByteArray)
+    }
+
+    rv
   }
-
-  def getSize: Int = hashMap.size
-
-  def addKey(key: Token): Unit = {
-    hashMap.put(key, 1)
-  }
-
-  override def toString: String =
-    s"""Buffer{
-       |map=$hashMap
-       |}""".stripMargin
 }
