@@ -44,13 +44,14 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.functions.dpf_03.BloomFilterAggregator
-import com.teragrep.functions.dpf_03.BloomFilterBuffer
+import com.teragrep.functions.dpf_03.{BloomFilterAggregator, BloomFilterBuffer, TokenizerUDF}
+import org.apache.spark.sql.api.java.UDF1
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
+import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
-import org.apache.spark.sql.{DataFrame, Dataset, Row, RowFactory, SparkSession}
-import org.apache.spark.sql.types.{DataTypes, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, RowFactory, SparkSession, functions}
+import org.apache.spark.sql.types.{ArrayType, ByteType, DataTypes, MetadataBuilder, StructField, StructType}
 import org.junit.Assert.assertEquals
 
 import java.sql.Timestamp
@@ -91,15 +92,28 @@ class BloomFilterAggregatorTest {
 
     var rowDataset = rowMemoryStream.toDF
 
+
+
+    // create Scala udf
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.createArrayType(ByteType, false), false))
+    // register udf
+    sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
+
+    // apply udf to column
+    rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
+
+
+    // run bloomfilter on the column
     val tokenAggregator = new BloomFilterAggregator("_raw", 32, Map(50000L -> 0.01))
     val tokenAggregatorColumn = tokenAggregator.toColumn
 
-    rowDataset = rowDataset
+
+    val aggregatedDataset = rowDataset
       .groupBy("partition")
       .agg(tokenAggregatorColumn)
       .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
 
-    val streamingQuery = startStream(rowDataset)
+    val streamingQuery = startStream(aggregatedDataset)
     var run: Long = 0
 
     while (streamingQuery.isActive) {
