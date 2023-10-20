@@ -49,37 +49,34 @@ package com.teragrep.functions.dpf_03;
 import com.teragrep.blf_01.Token;
 import com.teragrep.blf_01.Tokenizer;
 import org.apache.spark.sql.api.java.UDF1;
-import scala.collection.immutable.$colon$colon;
-import scala.collection.mutable.WrappedArray;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 
-public class TokenizerUDF implements UDF1<String, scala.collection.immutable.List<WrappedArray<Byte>>> {
+public class TokenizerUDF implements UDF1<String, List<byte[]>> {
 
     private Tokenizer tokenizer = null;
 
     @Override
-    public scala.collection.immutable.List<WrappedArray<Byte>> call(String s) throws Exception {
+    public List<byte[]> call(String s) throws Exception {
         if (tokenizer == null) {
             // "lazy" init
             tokenizer = new Tokenizer(32);
         }
 
         // create empty Scala immutable List
-        scala.collection.immutable.List<WrappedArray<Byte>> rv = scala.collection.immutable.List.empty();
+        ArrayList<byte[]> rvList = new ArrayList<>();
 
         ByteArrayInputStream bais = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
         List<Token> tokens = tokenizer.tokenize(bais);
 
         for (Token token : tokens) {
-            WrappedArray<Byte> tokenBytesWrappedArray = WrappedArray.make(token.bytes);
-            // create new Scala immutabe list containing the old list and the new item.
-            rv = new $colon$colon<>(tokenBytesWrappedArray, rv);
+            rvList.add(token.bytes);
         }
-        return rv;
 
+        return rvList;
     }
 }

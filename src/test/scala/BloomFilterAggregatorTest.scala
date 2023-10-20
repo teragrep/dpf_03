@@ -44,20 +44,17 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.functions.dpf_03.{BloomFilterAggregator, BloomFilterBuffer, TokenizerUDF}
-import org.apache.spark.sql.api.java.UDF1
+import com.teragrep.functions.dpf_03.{BloomFilterAggregator, TokenizerUDF}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
-import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
-import org.apache.spark.sql.{DataFrame, Dataset, Row, RowFactory, SparkSession, functions}
-import org.apache.spark.sql.types.{ArrayType, ByteType, DataTypes, MetadataBuilder, StructField, StructType}
-import org.junit.Assert.assertEquals
+import org.apache.spark.sql.types._
+import org.apache.spark.sql._
+import org.apache.spark.util.sketch.BloomFilter
 
+import java.io.ByteArrayInputStream
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
-import java.util
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 class BloomFilterAggregatorTest {
@@ -104,9 +101,8 @@ class BloomFilterAggregatorTest {
 
 
     // run bloomfilter on the column
-    val tokenAggregator = new BloomFilterAggregator("_raw", 32, Map(50000L -> 0.01))
+    val tokenAggregator = new BloomFilterAggregator("tokens", 50000L, 0.01)
     val tokenAggregatorColumn = tokenAggregator.toColumn
-
 
     val aggregatedDataset = rowDataset
       .groupBy("partition")
@@ -130,9 +126,18 @@ class BloomFilterAggregatorTest {
       }
     }
 
-    val finalResult = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collectAsList()
-    println(finalResult.size())
-    println(finalResult)
+    val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
+
+    assert(resultCollected.length == 10)
+
+    for (row <- resultCollected) {
+      val bfArray = row.getAs[Array[Byte]]("bloomfilter")
+      val bais = new ByteArrayInputStream(bfArray)
+      val resBf = BloomFilter.readFrom(bais)
+      assert(resBf.mightContain("127.127"))
+      assert(resBf.mightContain("service=tcp/port:8151"))
+      assert(resBf.mightContain("duration="))
+    }
   }
 
   private def makeRows(time: Timestamp, partition: String): Seq[Row] = {
