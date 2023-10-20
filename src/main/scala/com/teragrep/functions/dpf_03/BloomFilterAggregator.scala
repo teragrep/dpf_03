@@ -66,9 +66,9 @@ class BloomFilterAggregator(final val columnName: String, final val bloomfilterE
   }
 
   override def reduce(buffer: BloomFilter, row: Row): BloomFilter = {
-    val tokens = row.getAs[mutable.WrappedArray[mutable.WrappedArray[Byte]]](columnName)
+    val tokens : mutable.WrappedArray[mutable.WrappedArray[Byte]] = row.getAs[mutable.WrappedArray[mutable.WrappedArray[Byte]]](columnName)
 
-    for (token <- tokens) {
+    for (token : mutable.WrappedArray[Byte] <- tokens) {
       val tokenByteArray: Array[Byte] = token.toArray
       buffer.putBinary(tokenByteArray)
     }

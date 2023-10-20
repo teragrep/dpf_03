@@ -137,6 +137,7 @@ class BloomFilterAggregatorTest {
       assert(resBf.mightContain("127.127"))
       assert(resBf.mightContain("service=tcp/port:8151"))
       assert(resBf.mightContain("duration="))
+      assert(!resBf.mightContain("fox"))
     }
   }
 
