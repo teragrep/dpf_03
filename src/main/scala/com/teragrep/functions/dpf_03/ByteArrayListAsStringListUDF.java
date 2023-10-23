@@ -44,28 +44,37 @@
  * a licensee so wish it.
  */
 
-package com.teragrep.functions.dpf_03
+package com.teragrep.functions.dpf_03;
 
-import scala.collection.mutable
-import org.apache.spark.util.sketch.BloomFilter
+import org.apache.spark.sql.api.java.UDF1;
+import scala.collection.Iterator;
+import scala.collection.mutable.WrappedArray;
 
-import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
-class BloomFilterBuffer(final val sizeSplit: Map[Long, Double]) {
+public class ByteArrayListAsStringListUDF implements UDF1<WrappedArray<WrappedArray<Byte>>, List<String>> {
 
-  val sizeToBloomFilterMap: mutable.HashMap[Long, Array[Byte]] = {
-    val rv = mutable.HashMap[Long, Array[Byte]]()
 
-    for ((size, fpp) <- sizeSplit) {
+    @Override
+    public List<String> call(WrappedArray<WrappedArray<Byte>> wrappedArrayWrappedArray) throws Exception {
+        List<String> rv = new ArrayList<>();
 
-      val bf: BloomFilter = BloomFilter.create(size, fpp)
+        Iterator<WrappedArray<Byte>> listIterator = wrappedArrayWrappedArray.iterator();
+        while (listIterator.hasNext()) {
+            WrappedArray<Byte> boxedBytes = listIterator.next();
+            int dataLength = boxedBytes.length();
+            byte[] unboxedBytes = new byte[dataLength];
 
-      val baos: ByteArrayOutputStream = new ByteArrayOutputStream()
+            Iterator<Byte> stringIterator = boxedBytes.iterator();
+            for (int i = 0; i < dataLength; i++) {
+                unboxedBytes[i] = stringIterator.next();
+            }
 
-      bf.writeTo(baos)
-      rv.put(size, baos.toByteArray)
+            rv.add(new String(unboxedBytes, StandardCharsets.UTF_8));
+        }
+
+        return rv;
     }
-
-    rv
-  }
 }

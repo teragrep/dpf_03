@@ -44,58 +44,39 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.functions.dpf_03.BloomFilterAggregator
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ArrayType, ByteType, StringType, StructField, StructType}
-import org.apache.spark.util.sketch.BloomFilter
-import org.junit.jupiter.api.Disabled
+package com.teragrep.functions.dpf_03;
 
-import java.io.ByteArrayInputStream
-import java.nio.charset.StandardCharsets
-import scala.collection.mutable
+import com.teragrep.blf_01.Token;
+import com.teragrep.blf_01.Tokenizer;
+import org.apache.spark.sql.api.java.UDF1;
 
-class BloomFilterBufferTest {
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
-  @org.junit.jupiter.api.Test
-  @Disabled // failing, possibly WrappedArray conversion is the cause
-  def testNoDuplicateKeys(): Unit = {
 
-    // TODO test other sizes / size categorization
-    val bloomfilterExpectedItems = 50000L
-    val bloomfilterFpp = 0.01D
+public class TokenizerUDF implements UDF1<String, List<byte[]>> {
 
-    // single token, converted to WrappedArray
-    val input: String = "one,one"
-    val inputBytes : Array[Byte] = input.getBytes(StandardCharsets.UTF_8)
-    val inputWrappedArray : mutable.WrappedArray[Byte] = inputBytes
+    private Tokenizer tokenizer = null;
 
-    // multitude of tokens, converted to WrappedArray
-    val inputsArray = Array(inputWrappedArray)
-    val inputsWrappedArray : mutable.WrappedArray[mutable.WrappedArray[Byte]] = inputsArray
+    @Override
+    public List<byte[]> call(String s) throws Exception {
+        if (tokenizer == null) {
+            // "lazy" init
+            tokenizer = new Tokenizer(32);
+        }
 
-    // list of columns
-    val columns = Array[Any](inputsWrappedArray)
-    val columnName = "column1";
+        // create empty Scala immutable List
+        ArrayList<byte[]> rvList = new ArrayList<>();
 
-    val schema = StructType(Seq(StructField(columnName, ArrayType(ArrayType(ByteType)))))
-    val row = new GenericRowWithSchema(columns, schema)
+        ByteArrayInputStream bais = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
+        List<Token> tokens = tokenizer.tokenize(bais);
 
-    val bfAgg : BloomFilterAggregator = new BloomFilterAggregator(columnName, bloomfilterExpectedItems, bloomfilterFpp)
+        for (Token token : tokens) {
+            rvList.add(token.bytes);
+        }
 
-    val bfAggBuf = bfAgg.zero()
-    bfAgg.reduce(bfAggBuf, row)
-
-    // TODO test merge
-
-    val outArr : Array[Byte] = bfAgg.finish(bfAggBuf)
-
-    val bios = new ByteArrayInputStream(outArr)
-
-    val bf = BloomFilter.readFrom(bios)
-
-    // "one" and ","
-    assert(bf.mightContain("one"))
-    assert(bf.mightContain(","))
-  }
-
+        return rvList;
+    }
 }

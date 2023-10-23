@@ -46,66 +46,38 @@
 
 package com.teragrep.functions.dpf_03
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, Serializable}
+import java.io.{ByteArrayOutputStream, Serializable}
 import com.teragrep.blf_01.Tokenizer
 import org.apache.spark.sql.{Encoder, Encoders, Row}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.Aggregator
 import org.apache.spark.util.sketch.BloomFilter
 
-import java.nio.charset.StandardCharsets
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
-class BloomFilterAggregator(final val columnName: String, final val maxMinorTokens: Long, final val sizeSplit: Map[Long, Double]) extends Aggregator[Row, BloomFilterBuffer, Array[Byte]]
+class BloomFilterAggregator(final val columnName: String, final val bloomfilterExpectedItems: Long, final val bloomfilterFfp: Double ) extends Aggregator[Row, BloomFilter, Array[Byte]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
 
-  override def zero(): BloomFilterBuffer = {
-    tokenizer = Some(new Tokenizer(maxMinorTokens))
-    new BloomFilterBuffer(sizeSplit)
+  override def zero(): BloomFilter = {
+    BloomFilter.create(bloomfilterExpectedItems, bloomfilterFfp)
   }
 
-  override def reduce(buffer: BloomFilterBuffer, row: Row): BloomFilterBuffer = {
-    val input = row.getAs[String](columnName).getBytes(StandardCharsets.UTF_8)
-    val stream = new ByteArrayInputStream(input)
-    
-    for ((size: Long, bfByteArray: Array[Byte]) <- buffer.sizeToBloomFilterMap) {
-      val bios: ByteArrayInputStream = new ByteArrayInputStream(bfByteArray)
-      val bf = BloomFilter.readFrom(bios)
-      
-      tokenizer.get.tokenize(stream).forEach(
-        token => {
-          bf.put(token.bytes)
-        }
-      )
+  override def reduce(buffer: BloomFilter, row: Row): BloomFilter = {
+    val tokens : mutable.WrappedArray[mutable.WrappedArray[Byte]] = row.getAs[mutable.WrappedArray[mutable.WrappedArray[Byte]]](columnName)
 
-      val baos = new ByteArrayOutputStream()
-      bf.writeTo(baos)
-
-      buffer.sizeToBloomFilterMap.put(size, baos.toByteArray)
+    for (token : mutable.WrappedArray[Byte] <- tokens) {
+      val tokenByteArray: Array[Byte] = token.toArray
+      buffer.putBinary(tokenByteArray)
     }
 
     buffer
   }
 
-  override def merge(ours: BloomFilterBuffer, their: BloomFilterBuffer): BloomFilterBuffer = {
-    for ((size: Long, bfByteArray: Array[Byte]) <- ours.sizeToBloomFilterMap) {
-      val ourBios: ByteArrayInputStream = new ByteArrayInputStream(bfByteArray)
-      val ourBf = BloomFilter.readFrom(ourBios)
-
-      val maybeArray: Option[Array[Byte]] = their.sizeToBloomFilterMap.get(size)
-      val theirBios = new ByteArrayInputStream(maybeArray.get)
-      val theirBf = BloomFilter.readFrom(theirBios)
-
-      ourBf.mergeInPlace(theirBf)
-
-      val ourBaos = new ByteArrayOutputStream()
-      ourBf.writeTo(ourBaos)
-
-      ours.sizeToBloomFilterMap.put(size, ourBaos.toByteArray)
-    }
-    ours
+  override def merge(ours: BloomFilter, their: BloomFilter): BloomFilter = {
+    ours.mergeInPlace(their)
   }
 
   /**
@@ -113,26 +85,13 @@ class BloomFilterAggregator(final val columnName: String, final val maxMinorToke
    * @param buffer BloomFilterBuffer returned by reduce step
    * @return best candidate by fpp being smaller than requested
    */
-  override def finish(buffer: BloomFilterBuffer): Array[Byte] = {
-
-    // default to largest
-    var out = buffer.sizeToBloomFilterMap(buffer.sizeToBloomFilterMap.keys.max)
-    // seek best candidate, from smallest to largest
-    for (size <- buffer.sizeToBloomFilterMap.keys.toSeq.sorted) {
-      val bios = new ByteArrayInputStream(buffer.sizeToBloomFilterMap(size))
-      val bf = BloomFilter.readFrom(bios)
-      val sizeFpp: Double = sizeSplit(size)
-
-      if (bf.expectedFpp() <= sizeFpp) {
-        val baos = new ByteArrayOutputStream()
-        bf.writeTo(baos)
-        out = baos.toByteArray
-      }
-    }
-    out
+  override def finish(buffer: BloomFilter): Array[Byte] = {
+    val baos = new ByteArrayOutputStream()
+    buffer.writeTo(baos)
+    baos.toByteArray
   }
 
-  override def bufferEncoder: Encoder[BloomFilterBuffer] = customKryoEncoder[BloomFilterBuffer]
+  override def bufferEncoder: Encoder[BloomFilter] = customKryoEncoder[BloomFilter]
 
   override def outputEncoder: Encoder[Array[Byte]] = ExpressionEncoder[Array[Byte]]
 

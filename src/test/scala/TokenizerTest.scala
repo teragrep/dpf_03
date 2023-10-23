@@ -44,20 +44,21 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.functions.dpf_03.{BloomFilterAggregator, TokenizerUDF}
+import com.teragrep.functions.dpf_03.{BloomFilterAggregator, ByteArrayListAsStringListUDF, TokenizerUDF}
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql._
 import org.apache.spark.util.sketch.BloomFilter
 
 import java.io.ByteArrayInputStream
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class BloomFilterAggregatorTest {
+class TokenizerTest {
   val exampleString: String = "NetScreen row=[Root]system-notification-00257" +
     "(traffic\uD83D\uDE41 start_time=\"2022-09-02 10:13:40\"" +
     " duration=0 policy_id=320000 service=tcp/port:8151 proto=6" +
@@ -91,25 +92,20 @@ class BloomFilterAggregatorTest {
 
 
 
-    // create Scala udf
+    // create Scala udf for tokenizer
     val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.createArrayType(ByteType, false), false))
-    // register udf
+    // register tokenizer udf
     sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
 
-    // apply udf to column
+    // apply tokenizer udf to column
     rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
 
+    // create Scala udf for ByteArrayListasStringList
+    val byteArrayListAsStringListUDF = functions.udf(new ByteArrayListAsStringListUDF, DataTypes.createArrayType(StringType))
+    sparkSession.udf.register("bytes_to_string_udf", byteArrayListAsStringListUDF)
+    rowDataset = rowDataset.withColumn("tokensAsStrings", byteArrayListAsStringListUDF.apply(functions.col("tokens")))
 
-    // run bloomfilter on the column
-    val tokenAggregator = new BloomFilterAggregator("tokens", 50000L, 0.01)
-    val tokenAggregatorColumn = tokenAggregator.toColumn
-
-    val aggregatedDataset = rowDataset
-      .groupBy("partition")
-      .agg(tokenAggregatorColumn)
-      .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
-
-    val streamingQuery = startStream(aggregatedDataset)
+    val streamingQuery = startStream(rowDataset)
     var run: Long = 0
 
     while (streamingQuery.isActive) {
@@ -126,18 +122,16 @@ class BloomFilterAggregatorTest {
       }
     }
 
-    val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
-
-    assert(resultCollected.length == 10)
+    val resultCollected = sqlContext.sql("SELECT tokensAsStrings FROM TokenAggregatorQuery").collect()
 
     for (row <- resultCollected) {
-      val bfArray = row.getAs[Array[Byte]]("bloomfilter")
-      val bais = new ByteArrayInputStream(bfArray)
-      val resBf = BloomFilter.readFrom(bais)
-      assert(resBf.mightContain("127.127"))
-      assert(resBf.mightContain("service=tcp/port:8151"))
-      assert(resBf.mightContain("duration="))
-      assert(!resBf.mightContain("fox"))
+      val tokens = row.getAs[mutable.WrappedArray[String]]("tokensAsStrings")
+
+      assert(tokens.contains("127.127"))
+      assert(tokens.contains("service=tcp/port:8151"))
+      assert(tokens.contains("duration="))
+      assert(!tokens.contains("fox"))
+
     }
   }
 
@@ -175,7 +169,7 @@ class BloomFilterAggregatorTest {
 
   private def startStream(rowDataset: Dataset[Row]): StreamingQuery =
     rowDataset.writeStream.queryName("TokenAggregatorQuery")
-      .outputMode("complete")
+      .outputMode("append")
       .format("memory")
       .trigger(Trigger.ProcessingTime(0L))
       .start
