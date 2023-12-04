@@ -56,27 +56,36 @@ import org.apache.spark.util.sketch.BloomFilter
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-class BloomFilterAggregator(final val columnName: String, final val bloomfilterExpectedItems: Long, final val bloomfilterFfp: Double ) extends Aggregator[Row, BloomFilter, Array[Byte]]
+class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sizeMap: Map[Long, Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
 
   override def zero(): BloomFilter = {
-    BloomFilter.create(bloomfilterExpectedItems, bloomfilterFfp)
+    BloomFilter.create(1, 0.01)
   }
 
   override def reduce(buffer: BloomFilter, row: Row): BloomFilter = {
+    var newBuffer = buffer
     val tokens : mutable.WrappedArray[mutable.WrappedArray[Byte]] = row.getAs[mutable.WrappedArray[mutable.WrappedArray[Byte]]](columnName)
+    val estimate: Long = row.getAs[Long](estimateName)
+
+    if (newBuffer.bitSize() == 64) {
+      newBuffer = getFilter(estimate)
+    }
 
     for (token : mutable.WrappedArray[Byte] <- tokens) {
       val tokenByteArray: Array[Byte] = token.toArray
-      buffer.putBinary(tokenByteArray)
+      newBuffer.putBinary(tokenByteArray)
     }
 
-    buffer
+    newBuffer
   }
 
   override def merge(ours: BloomFilter, their: BloomFilter): BloomFilter = {
+    // ignore merge with zero buffer
+    if (!ours.isCompatible(their)) return their
+
     ours.mergeInPlace(their)
   }
 
@@ -96,4 +105,14 @@ class BloomFilterAggregator(final val columnName: String, final val bloomfilterE
   override def outputEncoder: Encoder[Array[Byte]] = ExpressionEncoder[Array[Byte]]
 
   implicit def customKryoEncoder[A](implicit ct: ClassTag[A]): Encoder[A] = Encoders.kryo[A](ct)
+
+  private def getFilter(estimate: Long): BloomFilter = {
+    for (entry <- sizeMap) {
+      if (estimate <= entry._1) {
+        return BloomFilter.create(entry._1, entry._2)
+      }
+    }
+
+    BloomFilter.create(1000L, 0.01)
+  }
 }

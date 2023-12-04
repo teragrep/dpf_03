@@ -68,16 +68,18 @@ class BloomFilterAggregatorTest {
   val amount: Long = 10
 
   val testSchema: StructType = new StructType(
-    Array[StructField]
-      (StructField("_time", DataTypes.TimestampType, nullable = false, new MetadataBuilder().build),
-        StructField("_raw", DataTypes.StringType, nullable = false, new MetadataBuilder().build),
-        StructField("index", DataTypes.StringType, nullable = false, new MetadataBuilder().build),
-        StructField("sourcetype", DataTypes.StringType, nullable = false, new MetadataBuilder().build),
-        StructField("host", DataTypes.StringType, nullable = false, new MetadataBuilder().build),
-        StructField("source", DataTypes.StringType, nullable = false, new MetadataBuilder().build),
-        StructField("partition", DataTypes.StringType, nullable = false, new MetadataBuilder().build),
-        // Offset set as string instead of Long.
-        StructField("offset", DataTypes.StringType, nullable = false, new MetadataBuilder().build)))
+    Array[StructField](
+      StructField("_time", TimestampType, nullable = false, new MetadataBuilder().build),
+      StructField("_raw", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("index", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("sourcetype", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("host", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("source", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("partition", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("offset", LongType, nullable = false, new MetadataBuilder().build),
+      StructField("estimate(tokens)", LongType, nullable = false, new MetadataBuilder().build)
+    )
+  )
 
   @org.junit.jupiter.api.Test
   def testTokenization(): Unit = {
@@ -88,7 +90,7 @@ class BloomFilterAggregatorTest {
     val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
 
     var rowDataset = rowMemoryStream.toDF
-
+    val sizeMap: Map[Long, Double] = Map(1000L -> 0.01, 10000L -> 0.01)
 
 
     // create Scala udf
@@ -99,9 +101,8 @@ class BloomFilterAggregatorTest {
     // apply udf to column
     rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
 
-
     // run bloomfilter on the column
-    val tokenAggregator = new BloomFilterAggregator("tokens", 50000L, 0.01)
+    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", sizeMap)
     val tokenAggregatorColumn = tokenAggregator.toColumn
 
     val aggregatedDataset = rowDataset
@@ -146,15 +147,17 @@ class BloomFilterAggregatorTest {
     val rowList: ArrayBuffer[Row] = new ArrayBuffer[Row]
     val rowData = generateRawData()
 
-    for (i <- 0 until amount.toInt) {
-      val row = RowFactory.create(time,
+    for (_ <- 0 until amount.toInt) {
+      val row = Row(
+        time,
         exampleString,
         "topic",
         "stream",
         "host",
         "input",
         partition,
-        "0L")
+        0L,
+        exampleString.length.toLong)
 
       rowList += row
     }
