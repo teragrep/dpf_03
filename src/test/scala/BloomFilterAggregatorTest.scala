@@ -148,7 +148,7 @@ class BloomFilterAggregatorTest {
     val rowList: ArrayBuffer[Row] = new ArrayBuffer[Row]
     val rowData = generateRawData()
 
-    for (_ <- 0 until amount.toInt) {
+    for (i <- 0 until amount.toInt) {
       val row = Row(
         time,
         exampleString,
@@ -156,7 +156,7 @@ class BloomFilterAggregatorTest {
         "stream",
         "host",
         "input",
-        partition,
+        i.toString,
         0L,
         exampleString.length.toLong)
 
