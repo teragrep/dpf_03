@@ -61,7 +61,7 @@ class BloomFilterBufferTest {
   def testNoDuplicateKeys(): Unit = {
 
     // TODO test other sizes / size categorization
-    val sizeMap: Map[Long, Double] = Map(1000L -> 0.01, 10000L -> 0.01)
+    val sizeMap: mutable.TreeMap[Long, Double] = mutable.TreeMap(1000L -> 0.01, 10000L -> 0.01)
 
     // single token, converted to WrappedArray
     val input: String = "one,one"

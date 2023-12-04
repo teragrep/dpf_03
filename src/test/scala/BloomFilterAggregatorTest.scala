@@ -55,6 +55,7 @@ import org.apache.spark.util.sketch.BloomFilter
 import java.io.ByteArrayInputStream
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 class BloomFilterAggregatorTest {
@@ -90,7 +91,7 @@ class BloomFilterAggregatorTest {
     val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
 
     var rowDataset = rowMemoryStream.toDF
-    val sizeMap: Map[Long, Double] = Map(1000L -> 0.01, 10000L -> 0.01)
+    val sizeMap: mutable.TreeMap[Long, Double] = mutable.TreeMap(1000L -> 0.01, 10000L -> 0.01)
 
 
     // create Scala udf

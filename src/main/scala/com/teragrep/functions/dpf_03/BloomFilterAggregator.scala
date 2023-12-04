@@ -56,7 +56,7 @@ import org.apache.spark.util.sketch.BloomFilter
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sizeMap: Map[Long, Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
+class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sizeMap: mutable.SortedMap[Long, Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
@@ -107,12 +107,19 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
   implicit def customKryoEncoder[A](implicit ct: ClassTag[A]): Encoder[A] = Encoders.kryo[A](ct)
 
   private def getFilter(estimate: Long): BloomFilter = {
+
+    var backupExpected = 0L
+    var backupFpp = 0.01
+
     for (entry <- sizeMap) {
+      backupExpected = entry._1
+      backupFpp = entry._2
+
       if (estimate <= entry._1) {
         return BloomFilter.create(entry._1, entry._2)
       }
     }
 
-    BloomFilter.create(1000L, 0.01)
+    BloomFilter.create(backupExpected, backupFpp)
   }
 }
