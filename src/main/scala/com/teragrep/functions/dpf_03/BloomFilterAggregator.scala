@@ -70,8 +70,8 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
     val tokens : mutable.WrappedArray[mutable.WrappedArray[Byte]] = row.getAs[mutable.WrappedArray[mutable.WrappedArray[Byte]]](columnName)
     val estimate: Long = row.getAs[Long](estimateName)
 
-    if (newBuffer.bitSize() == 64) {
-      newBuffer = getFilter(estimate)
+    if (newBuffer.bitSize() == 64) { // zero() will have 64 bitSize
+      newBuffer = selectFilterFromMap(estimate)
     }
 
     for (token : mutable.WrappedArray[Byte] <- tokens) {
@@ -106,7 +106,7 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
 
   implicit def customKryoEncoder[A](implicit ct: ClassTag[A]): Encoder[A] = Encoders.kryo[A](ct)
 
-  private def getFilter(estimate: Long): BloomFilter = {
+  private def selectFilterFromMap(estimate: Long): BloomFilter = {
 
     var backupExpected = 0L
     var backupFpp = 0.01

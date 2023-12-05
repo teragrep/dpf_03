@@ -90,8 +90,6 @@ class TokenizerTest {
 
     var rowDataset = rowMemoryStream.toDF
 
-
-
     // create Scala udf for tokenizer
     val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.createArrayType(ByteType, false), false))
     // register tokenizer udf
@@ -138,10 +136,9 @@ class TokenizerTest {
   private def makeRows(time: Timestamp, partition: String): Seq[Row] = {
 
     val rowList: ArrayBuffer[Row] = new ArrayBuffer[Row]
-    val rowData = generateRawData()
 
     for (i <- 0 until amount.toInt) {
-      val row = Row(
+      rowList += Row(
         time,
         exampleString,
         "topic",
@@ -152,8 +149,6 @@ class TokenizerTest {
         0L,
         exampleString.length.toLong
       )
-
-      rowList += row
     }
     rowList
   }
