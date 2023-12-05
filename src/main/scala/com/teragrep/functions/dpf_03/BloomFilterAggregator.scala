@@ -83,12 +83,16 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
   }
 
   override def merge(ours: BloomFilter, their: BloomFilter): BloomFilter = {
-    var reduced = their
-    if (reduced.bitSize() != 64) { // zero() will have 64 bitSize
-      reduced = ours.mergeInPlace(their)
+    var reducedBuffer = ours
+
+    if (ours.bitSize() != 64 && their.bitSize() != 64) {
+      reducedBuffer = ours.mergeInPlace(their)
+    }
+    else if (ours.bitSize() == 64) {
+      reducedBuffer = their
     }
 
-    reduced
+    reducedBuffer
   }
 
   /**
