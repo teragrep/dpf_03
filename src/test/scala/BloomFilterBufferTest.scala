@@ -61,8 +61,7 @@ class BloomFilterBufferTest {
   def testNoDuplicateKeys(): Unit = {
 
     // TODO test other sizes / size categorization
-    val bloomfilterExpectedItems = 50000L
-    val bloomfilterFpp = 0.01D
+    val sizeMap: mutable.TreeMap[Long, Double] = mutable.TreeMap(1000L -> 0.01, 10000L -> 0.01)
 
     // single token, converted to WrappedArray
     val input: String = "one,one"
@@ -80,7 +79,7 @@ class BloomFilterBufferTest {
     val schema = StructType(Seq(StructField(columnName, ArrayType(ArrayType(ByteType)))))
     val row = new GenericRowWithSchema(columns, schema)
 
-    val bfAgg : BloomFilterAggregator = new BloomFilterAggregator(columnName, bloomfilterExpectedItems, bloomfilterFpp)
+    val bfAgg : BloomFilterAggregator = new BloomFilterAggregator(columnName, "estimate(tokens)", sizeMap)
 
     val bfAggBuf = bfAgg.zero()
     bfAgg.reduce(bfAggBuf, row)
