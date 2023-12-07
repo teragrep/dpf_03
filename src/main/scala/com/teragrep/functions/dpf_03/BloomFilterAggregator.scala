@@ -125,7 +125,7 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
       }
     }
     val fpp = sortedScalaMap.getOrElse(size,
-      throw new RuntimeException("sortedScalaMap did not contain key for size" + size))
+      throw new RuntimeException("sortedScalaMap did not contain value for key size: " + size))
 
     BloomFilter.create(size, fpp)
   }
