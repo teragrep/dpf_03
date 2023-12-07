@@ -57,7 +57,7 @@ import scala.collection.mutable
 import scala.reflect.ClassTag
 import scala.collection.JavaConverters._
 
-class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
+class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sortedSizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
@@ -114,15 +114,19 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
   implicit def customKryoEncoder[A](implicit ct: ClassTag[A]): Encoder[A] = Encoders.kryo[A](ct)
 
   private def selectFilterFromMap(estimate: Long): BloomFilter = {
-    val scalaMap = sizeMap.asScala
-    var defaultFilter = BloomFilter.create(scalaMap.last._1, scalaMap.last._2)
+    val sortedScalaMap = sortedSizeMap.asScala
 
-    for (entry <- scalaMap) {
-      if (estimate <= entry._1) {
-        defaultFilter = BloomFilter.create(entry._1, entry._2)
+    // default to largest
+    var size = sortedScalaMap.last._1
+
+    for (entry <- sortedScalaMap) {
+      if (entry._1 >= estimate && entry._1 < size) {
+        size = entry._1
       }
     }
+    val fpp = sortedScalaMap.getOrElse(size,
+      throw new RuntimeException("sortedScalaMap did not contain key for size" + size))
 
-    defaultFilter
+    BloomFilter.create(size, fpp)
   }
 }
