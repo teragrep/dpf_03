@@ -52,7 +52,7 @@ import org.junit.jupiter.api.Disabled
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.mutable
 
 class BloomFilterBufferTest {
 

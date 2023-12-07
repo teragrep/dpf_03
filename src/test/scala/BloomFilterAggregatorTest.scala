@@ -55,7 +55,6 @@ import org.apache.spark.util.sketch.BloomFilter
 import java.io.ByteArrayInputStream
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
-import scala.collection.{JavaConverters, mutable}
 import scala.collection.mutable.ArrayBuffer
 
 class BloomFilterAggregatorTest {
