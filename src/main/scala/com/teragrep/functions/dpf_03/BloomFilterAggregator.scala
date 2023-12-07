@@ -84,10 +84,16 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
   }
 
   override def merge(ours: BloomFilter, their: BloomFilter): BloomFilter = {
-    // ignore merge with zero buffer
-    if (!ours.isCompatible(their)) return their
+    var reducedBuffer = ours
 
-    ours.mergeInPlace(their)
+    if (ours.bitSize() != 64 && their.bitSize() != 64) {
+      reducedBuffer = ours.mergeInPlace(their)
+    }
+    else if (ours.bitSize() == 64) {
+      reducedBuffer = their
+    }
+
+    reducedBuffer
   }
 
   /**
@@ -108,19 +114,15 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
   implicit def customKryoEncoder[A](implicit ct: ClassTag[A]): Encoder[A] = Encoders.kryo[A](ct)
 
   private def selectFilterFromMap(estimate: Long): BloomFilter = {
+    val scalaMap = sizeMap.asScala
+    var defaultFilter = BloomFilter.create(scalaMap.last._1, scalaMap.last._2)
 
-    var backupExpected = 0L
-    var backupFpp = 0.01
-
-    for (entry <- sizeMap.asScala) {
-      backupExpected = entry._1
-      backupFpp = entry._2
-
+    for (entry <- scalaMap) {
       if (estimate <= entry._1) {
-        return BloomFilter.create(entry._1, entry._2)
+        defaultFilter = BloomFilter.create(entry._1, entry._2)
       }
     }
 
-    BloomFilter.create(backupExpected, backupFpp)
+    defaultFilter
   }
 }
