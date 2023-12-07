@@ -46,7 +46,7 @@
 
 import com.teragrep.functions.dpf_03.BloomFilterAggregator
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
-import org.apache.spark.sql.types.{ArrayType, ByteType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, ByteType, StructField, StructType}
 import org.apache.spark.util.sketch.BloomFilter
 import org.junit.jupiter.api.Disabled
 
@@ -61,7 +61,10 @@ class BloomFilterBufferTest {
   def testNoDuplicateKeys(): Unit = {
 
     // TODO test other sizes / size categorization
-    val sizeMap: mutable.TreeMap[Long, Double] = mutable.TreeMap(1000L -> 0.01, 10000L -> 0.01)
+    val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
+      put(1000L, 0.01)
+      put(10000L, 0.01)
+    }
 
     // single token, converted to WrappedArray
     val input: String = "one,one"
@@ -79,7 +82,7 @@ class BloomFilterBufferTest {
     val schema = StructType(Seq(StructField(columnName, ArrayType(ArrayType(ByteType)))))
     val row = new GenericRowWithSchema(columns, schema)
 
-    val bfAgg : BloomFilterAggregator = new BloomFilterAggregator(columnName, "estimate(tokens)", sizeMap)
+    val bfAgg : BloomFilterAggregator = new BloomFilterAggregator(columnName, "estimate(tokens)", javaMap)
 
     val bfAggBuf = bfAgg.zero()
     bfAgg.reduce(bfAggBuf, row)
