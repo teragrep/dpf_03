@@ -55,8 +55,9 @@ import org.apache.spark.util.sketch.BloomFilter
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
+import scala.collection.JavaConverters._
 
-class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sizeMap: mutable.SortedMap[Long, Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
+class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
   with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
@@ -111,7 +112,7 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
     var backupExpected = 0L
     var backupFpp = 0.01
 
-    for (entry <- sizeMap) {
+    for (entry <- sizeMap.asScala) {
       backupExpected = entry._1
       backupFpp = entry._2
 
