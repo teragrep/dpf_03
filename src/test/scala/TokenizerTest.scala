@@ -91,7 +91,7 @@ class TokenizerTest {
     var rowDataset = rowMemoryStream.toDF
 
     // create Scala udf for tokenizer
-    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.createArrayType(ByteType, false), false))
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
     // register tokenizer udf
     sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
 
