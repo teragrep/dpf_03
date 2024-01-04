@@ -57,8 +57,10 @@ import scala.collection.mutable
 import scala.reflect.ClassTag
 import scala.collection.JavaConverters._
 
-class BloomFilterAggregator(final val columnName: String, final val estimateName: String, sortedSizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double]) extends Aggregator[Row, BloomFilter, Array[Byte]]
-  with Serializable {
+class BloomFilterAggregator(final val columnName: String,
+                            final val estimateName: String,
+                            sortedSizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double])
+  extends Aggregator[Row, BloomFilter, Array[Byte]] with Serializable {
 
   var tokenizer: Option[Tokenizer] = None
 
@@ -68,16 +70,15 @@ class BloomFilterAggregator(final val columnName: String, final val estimateName
 
   override def reduce(buffer: BloomFilter, row: Row): BloomFilter = {
     var newBuffer = buffer
-    val tokens : mutable.WrappedArray[mutable.WrappedArray[Byte]] = row.getAs[mutable.WrappedArray[mutable.WrappedArray[Byte]]](columnName)
+    val tokens : mutable.WrappedArray[Array[Byte]] = row.getAs[mutable.WrappedArray[Array[Byte]]](columnName)
     val estimate: Long = row.getAs[Long](estimateName)
 
     if (newBuffer.bitSize() == 64) { // zero() will have 64 bitSize
       newBuffer = selectFilterFromMap(estimate)
     }
 
-    for (token : mutable.WrappedArray[Byte] <- tokens) {
-      val tokenByteArray: Array[Byte] = token.toArray
-      newBuffer.putBinary(tokenByteArray)
+    for (token : Array[Byte] <- tokens) {
+      newBuffer.putBinary(token)
     }
 
     newBuffer
