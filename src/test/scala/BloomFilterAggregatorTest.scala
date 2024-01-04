@@ -97,7 +97,7 @@ class BloomFilterAggregatorTest {
 
 
     // create Scala udf
-    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.createArrayType(ByteType, false), false))
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
     // register udf
     sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
 
