@@ -199,6 +199,8 @@
             <!-- ci -->
             <exclude>.github/workflows/*.yml</exclude>
             <exclude>.github/workflows/*.yaml</exclude>
+            <exclude>.github/ISSUE_TEMPLATE/*.md</exclude>
+            <exclude>.github/ISSUE_TEMPLATE/*.yml</exclude>
             <exclude>toolchains.xml</exclude>
             <exclude>settings.xml</exclude>
             <!-- readme -->
