@@ -1,13 +1,13 @@
 # DPF_03
 
 Holds a customized lexical tokenizer as a Spark UDF and a bloom filter aggregator.
-Used to tokenize spark string columns and to aggregate columns into a bloom filter with configurable filter size selection.
+Used to tokenize spark string columns and aggregate column into a bloom filter with configurable filter size selection.
 
 ## Features
 
 ### TokenizerUDF
 
-Spark UDF that will tokenize incoming string value and returns it as a list of byte arrays.
+Spark UDF that will tokenize incoming string value and return it as a list of byte arrays.
 Tokenization rules are set in blf_01.
 
 ### ByteArrayListAsStringListUDF
@@ -19,8 +19,8 @@ Spark UDF that converts results from TokenizerUDF into a list of strings.
 Custom spark aggregator that aggregates a column string tokens into a single bloom filter and
 returns the bytes of the resulting filter that can be processed.
 
-Filter size is selected by giving the aggregator a name of a spark colum that holds an estimated value of tokens and a map 
-with a configuration values used by the spark bloom filter implementation (expected number of items, false positive probability).
+Filter size is selected by giving the aggregator the name of a spark column that holds an estimated value of tokens and
+by configuring a map of bloom filters with preset values (expected number of items, false positive probability).
 
 
 ## Documentation
@@ -33,7 +33,7 @@ Compatible with Java version 1.8 other versions might not work
 
 ## How to [compile/use/implement]
 
-See tests for how to apply and import into a spark project
+See tests for how to apply and import into a Spark project
 
 ## Contributing
 
