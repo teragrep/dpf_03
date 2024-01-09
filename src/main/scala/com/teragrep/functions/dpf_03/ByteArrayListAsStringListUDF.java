@@ -54,25 +54,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ByteArrayListAsStringListUDF implements UDF1<WrappedArray<WrappedArray<Byte>>, List<String>> {
+public class ByteArrayListAsStringListUDF implements UDF1<WrappedArray<byte[]>, List<String>> {
 
 
     @Override
-    public List<String> call(WrappedArray<WrappedArray<Byte>> wrappedArrayWrappedArray) throws Exception {
+    public List<String> call(WrappedArray<byte[]> wrappedByteArray) {
         List<String> rv = new ArrayList<>();
 
-        Iterator<WrappedArray<Byte>> listIterator = wrappedArrayWrappedArray.iterator();
+        Iterator<byte[]> listIterator = wrappedByteArray.iterator();
         while (listIterator.hasNext()) {
-            WrappedArray<Byte> boxedBytes = listIterator.next();
-            int dataLength = boxedBytes.length();
-            byte[] unboxedBytes = new byte[dataLength];
-
-            Iterator<Byte> stringIterator = boxedBytes.iterator();
-            for (int i = 0; i < dataLength; i++) {
-                unboxedBytes[i] = stringIterator.next();
-            }
-
-            rv.add(new String(unboxedBytes, StandardCharsets.UTF_8));
+            byte[] bytes = listIterator.next();
+            rv.add(new String(bytes, StandardCharsets.UTF_8));
         }
 
         return rv;

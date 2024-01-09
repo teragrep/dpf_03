@@ -55,7 +55,6 @@ import org.apache.spark.util.sketch.BloomFilter
 import java.io.ByteArrayInputStream
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 class BloomFilterAggregatorTest {
@@ -91,11 +90,14 @@ class BloomFilterAggregatorTest {
     val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
 
     var rowDataset = rowMemoryStream.toDF
-    val sizeMap: mutable.TreeMap[Long, Double] = mutable.TreeMap(1000L -> 0.01, 10000L -> 0.01)
+    val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
+      put(1000L, 0.01)
+      put(10000L, 0.01)
+    }
 
 
     // create Scala udf
-    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.createArrayType(ByteType, false), false))
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
     // register udf
     sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
 
@@ -103,7 +105,7 @@ class BloomFilterAggregatorTest {
     rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
 
     // run bloomfilter on the column
-    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", sizeMap)
+    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", javaMap)
     val tokenAggregatorColumn = tokenAggregator.toColumn
 
     val aggregatedDataset = rowDataset
