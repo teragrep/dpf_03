@@ -1,7 +1,7 @@
 # DPF_03
 
 Holds a customized lexical tokenizer as a Spark UDF and a bloom filter aggregator.
-Used to tokenize spark string columns and aggregate column into a bloom filter with configurable filter size selection.
+Used to tokenize spark string columns and run Spark aggregation into a bloom filter with configurable filter size selection.
 
 ## Features
 
