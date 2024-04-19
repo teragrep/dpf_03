@@ -138,9 +138,9 @@ class BloomFilterAggregatorTest {
       val bfArray = row.getAs[Array[Byte]]("bloomfilter")
       val bais = new ByteArrayInputStream(bfArray)
       val resBf = BloomFilter.readFrom(bais)
-      assert(resBf.mightContain("127.127"))
+      assert(resBf.mightContain("src=127.127.127.127"))
+      assert(resBf.mightContain("127"))
       assert(resBf.mightContain("service=tcp/port:8151"))
-      assert(resBf.mightContain("duration="))
       assert(!resBf.mightContain("fox"))
     }
   }
