@@ -125,9 +125,11 @@ class TokenizerTest {
     for (row <- resultCollected) {
       val tokens = row.getAs[mutable.WrappedArray[String]]("tokensAsStrings")
 
-      assert(tokens.contains("127.127"))
+      assert(tokens.contains("src=127.127.127.127"))
+      assert(tokens.contains("127"))
       assert(tokens.contains("service=tcp/port:8151"))
-      assert(tokens.contains("duration="))
+      assert(tokens.contains("port"))
+      assert(tokens.contains("duration"))
       assert(!tokens.contains("fox"))
 
     }
