@@ -51,32 +51,37 @@ import com.teragrep.blf_01.Tokenizer;
 import org.apache.spark.sql.api.java.UDF2;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 
 public class RegexTokenizerUDF implements UDF2<String, String, List<byte[]>> {
 
     private Tokenizer tokenizer = null;
+    private Pattern pattern = null;
 
     @Override
-    public List<byte[]> call(String s, String regex) {
+    public List<byte[]> call(final String s, final String regex) {
         if (tokenizer == null) {
             // "lazy" init
             tokenizer = new Tokenizer(32);
         }
+        if (pattern == null || !pattern.pattern().equals(regex)) {
+            // "lazy" init
+            pattern = Pattern.compile(regex);
+        }
 
         // create empty Scala immutable List
-        ArrayList<byte[]> rvList = new ArrayList<>();
+        final ArrayList<byte[]> rvList = new ArrayList<>();
 
-        ByteArrayInputStream bais = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
-        List<Token> tokens = tokenizer.tokenize(bais);
+        final InputStream bais = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
+        final List<Token> tokens = tokenizer.tokenize(bais);
 
-        for (Token token : tokens) {
-            if (token.toString().matches(regex)) {
-                rvList.add(token.bytes);
-            } else if (regex.isEmpty()) {
+        for (final Token token : tokens) {
+            if (regex.isEmpty() || pattern.matcher(token.toString()).matches()) {
                 rvList.add(token.bytes);
             }
         }
