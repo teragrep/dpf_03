@@ -56,6 +56,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 
 public class RegexTokenizerUDF implements UDF2<String, String, List<byte[]>> {
@@ -81,7 +82,7 @@ public class RegexTokenizerUDF implements UDF2<String, String, List<byte[]>> {
         final List<Token> tokens = tokenizer.tokenize(bais);
 
         for (final Token token : tokens) {
-            if (regex.isEmpty() || pattern.matcher(token.toString()).matches()) {
+            if (pattern.matcher(token.toString()).matches()) {
                 rvList.add(token.bytes);
             }
         }
