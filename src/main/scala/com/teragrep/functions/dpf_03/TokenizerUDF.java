@@ -64,7 +64,7 @@ public class TokenizerUDF implements UDF1<String, List<byte[]>> {
     public List<byte[]> call(String s) throws Exception {
         if (tokenizer == null) {
             // "lazy" init
-            tokenizer = new Tokenizer(0);
+            tokenizer = new Tokenizer(32);
         }
 
         // create empty Scala immutable List

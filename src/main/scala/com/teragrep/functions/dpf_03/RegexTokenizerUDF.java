@@ -64,7 +64,7 @@ public class RegexTokenizerUDF implements UDF2<String, String, List<byte[]>> {
     public List<byte[]> call(String s, String regex) {
         if (tokenizer == null) {
             // "lazy" init
-            tokenizer = new Tokenizer(0);
+            tokenizer = new Tokenizer(32);
         }
 
         // create empty Scala immutable List
