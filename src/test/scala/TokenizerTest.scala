@@ -50,6 +50,7 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
 import org.apache.spark.sql.types._
+import org.junit.jupiter.api.Test
 
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
@@ -80,7 +81,7 @@ class TokenizerTest {
       )
   )
 
-  @org.junit.jupiter.api.Test
+  @Test
   def testTokenization(): Unit = {
     val sparkSession = SparkSession.builder.master("local[*]").getOrCreate
     val sqlContext = sparkSession.sqlContext
@@ -121,6 +122,7 @@ class TokenizerTest {
     }
 
     val resultCollected = sqlContext.sql("SELECT tokensAsStrings FROM TokenAggregatorQuery").collect()
+    assert(resultCollected.length == 100)
 
     for (row <- resultCollected) {
       val tokens = row.getAs[mutable.WrappedArray[String]]("tokensAsStrings")
@@ -151,18 +153,6 @@ class TokenizerTest {
       )
     }
     rowList
-  }
-
-  private def generateRawData(): Array[String] = {
-    val testDataList = new Array[String](amount.toInt)
-
-    for (i <- testDataList.indices) {
-      val randomVal = Math.floor(Math.random() * 999)
-      val text = "ip=172.17.255."+randomVal+",port=8080,session_id=46889"
-      testDataList.update(i, text)
-
-    }
-    testDataList
   }
 
   private def startStream(rowDataset: Dataset[Row]): StreamingQuery =

@@ -51,6 +51,7 @@ import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql._
 import org.apache.spark.util.sketch.BloomFilter
+import org.junit.jupiter.api.Test
 
 import java.io.ByteArrayInputStream
 import java.sql.Timestamp
@@ -81,7 +82,7 @@ class BloomFilterAggregatorTest {
     )
   )
 
-  @org.junit.jupiter.api.Test
+  @Test
   def testTokenization(): Unit = {
     val sparkSession = SparkSession.builder.master("local[*]").getOrCreate
     val sqlContext = sparkSession.sqlContext
