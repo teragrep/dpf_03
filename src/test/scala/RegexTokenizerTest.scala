@@ -1,6 +1,6 @@
 /*
  * Teragrep Tokenizer DPF-03
- * Copyright (C) 2019, 2020, 2021, 2022, 2023  Suomen Kanuuna Oy
+ * Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024  Suomen Kanuuna Oy
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -44,21 +44,20 @@
  * a licensee so wish it.
  */
 
-import com.teragrep.functions.dpf_03.{BloomFilterAggregator, TokenizerUDF}
+import com.teragrep.functions.dpf_03.{ByteArrayListAsStringListUDF, RegexTokenizerUDF, TokenizerUDF}
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql._
-import org.apache.spark.util.sketch.BloomFilter
 import org.junit.jupiter.api.Test
 
-import java.io.ByteArrayInputStream
 import java.sql.Timestamp
 import java.time.{Instant, LocalDateTime, ZoneOffset}
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class BloomFilterAggregatorTest {
+class RegexTokenizerTest {
   val exampleString: String = "NetScreen row=[Root]system-notification-00257" +
     "(traffic\uD83D\uDE41 start_time=\"2022-09-02 10:13:40\"" +
     " duration=0 policy_id=320000 service=tcp/port:8151 proto=6" +
@@ -69,17 +68,17 @@ class BloomFilterAggregatorTest {
   val amount: Long = 10
 
   val testSchema: StructType = new StructType(
-    Array[StructField](
-      StructField("_time", TimestampType, nullable = false, new MetadataBuilder().build),
-      StructField("_raw", StringType, nullable = false, new MetadataBuilder().build),
-      StructField("index", StringType, nullable = false, new MetadataBuilder().build),
-      StructField("sourcetype", StringType, nullable = false, new MetadataBuilder().build),
-      StructField("host", StringType, nullable = false, new MetadataBuilder().build),
-      StructField("source", StringType, nullable = false, new MetadataBuilder().build),
-      StructField("partition", StringType, nullable = false, new MetadataBuilder().build),
-      StructField("offset", LongType, nullable = false, new MetadataBuilder().build),
-      StructField("estimate(tokens)", LongType, nullable = false, new MetadataBuilder().build)
-    )
+    Array[StructField]
+      (StructField("_time", TimestampType, nullable = false, new MetadataBuilder().build),
+        StructField("_raw", StringType, nullable = false, new MetadataBuilder().build),
+        StructField("index", StringType, nullable = false, new MetadataBuilder().build),
+        StructField("sourcetype", StringType, nullable = false, new MetadataBuilder().build),
+        StructField("host", StringType, nullable = false, new MetadataBuilder().build),
+        StructField("source", StringType, nullable = false, new MetadataBuilder().build),
+        StructField("partition", StringType, nullable = false, new MetadataBuilder().build),
+        StructField("offset", LongType, nullable = false, new MetadataBuilder().build),
+        StructField("estimate(tokens)", LongType, nullable = false, new MetadataBuilder().build)
+      )
   )
 
   @Test
@@ -91,30 +90,22 @@ class BloomFilterAggregatorTest {
     val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
 
     var rowDataset = rowMemoryStream.toDF
-    val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
-      put(1000L, 0.01)
-      put(10000L, 0.01)
-    }
+    val regex: String = "\\d+"
+    // create Scala udf for tokenizer
+    val regexUDF = functions.udf(new RegexTokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
+    // register tokenizer udf
+    sparkSession.udf.register("regex_udf", regexUDF)
+    // create pattern col for regex
+    rowDataset = rowDataset.withColumn("regex", functions.lit(regex))
+    // apply tokenizer udf to column
+    rowDataset = rowDataset.withColumn("tokens", regexUDF.apply(functions.col("_raw"), functions.col("regex")))
 
+    // create Scala udf for ByteArrayListasStringList
+    val byteArrayListAsStringListUDF = functions.udf(new ByteArrayListAsStringListUDF, DataTypes.createArrayType(StringType))
+    sparkSession.udf.register("bytes_to_string_udf", byteArrayListAsStringListUDF)
+    rowDataset = rowDataset.withColumn("tokensAsStrings", byteArrayListAsStringListUDF.apply(functions.col("tokens")))
 
-    // create Scala udf
-    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
-    // register udf
-    sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
-
-    // apply udf to column
-    rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
-
-    // run bloomfilter on the column
-    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", javaMap)
-    val tokenAggregatorColumn = tokenAggregator.toColumn
-
-    val aggregatedDataset = rowDataset
-      .groupBy("partition")
-      .agg(tokenAggregatorColumn)
-      .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
-
-    val streamingQuery = startStream(aggregatedDataset)
+    val streamingQuery = startStream(rowDataset)
     var run: Long = 0
 
     while (streamingQuery.isActive) {
@@ -131,58 +122,50 @@ class BloomFilterAggregatorTest {
       }
     }
 
-    val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
-
-    assert(resultCollected.length == 10)
+    val resultCollected = sqlContext.sql("SELECT tokensAsStrings FROM TokenAggregatorQuery").collect()
+    assert(resultCollected.length == 100)
 
     for (row <- resultCollected) {
-      val bfArray = row.getAs[Array[Byte]]("bloomfilter")
-      val bais = new ByteArrayInputStream(bfArray)
-      val resBf = BloomFilter.readFrom(bais)
-      assert(resBf.mightContain("127.127"))
-      assert(resBf.mightContain("service=tcp/port:8151"))
-      assert(resBf.mightContain("duration="))
-      assert(!resBf.mightContain("fox"))
+      val tokens = row.getAs[mutable.WrappedArray[String]]("tokensAsStrings")
+
+      assert(tokens.contains("00257"))
+      assert(tokens.contains("2022"))
+      assert(tokens.contains("52362"))
+      assert(tokens.contains("320000"))
+      assert(!tokens.contains("127.127"))
+      assert(!tokens.contains("=0"))
+      assert(!tokens.contains(".127 "))
+      assert(!tokens.contains("10:13:40"))
+      assert(!tokens.contains("service=tcp/port:8151"))
+      assert(!tokens.contains("duration="))
+      assert(!tokens.contains("fox"))
+
     }
   }
 
   private def makeRows(time: Timestamp, partition: String): Seq[Row] = {
 
     val rowList: ArrayBuffer[Row] = new ArrayBuffer[Row]
-    val rowData = generateRawData()
 
     for (i <- 0 until amount.toInt) {
-      val row = Row(
+      rowList += Row(
         time,
         exampleString,
         "topic",
         "stream",
         "host",
         "input",
-        i.toString,
+        partition,
         0L,
-        exampleString.length.toLong)
-
-      rowList += row
+        exampleString.length.toLong
+      )
     }
     rowList
   }
 
-  private def generateRawData(): Array[String] = {
-    val testDataList = new Array[String](amount.toInt)
-
-    for (i <- testDataList.indices) {
-      val randomVal = Math.floor(Math.random() * 999)
-      val text = "ip=172.17.255."+randomVal+",port=8080,session_id=46889"
-      testDataList.update(i, text)
-
-    }
-    testDataList
-  }
-
   private def startStream(rowDataset: Dataset[Row]): StreamingQuery =
     rowDataset.writeStream.queryName("TokenAggregatorQuery")
-      .outputMode("complete")
+      .outputMode("append")
       .format("memory")
       .trigger(Trigger.ProcessingTime(0L))
       .start

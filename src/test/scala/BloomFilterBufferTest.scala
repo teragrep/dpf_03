@@ -48,7 +48,7 @@ import com.teragrep.functions.dpf_03.BloomFilterAggregator
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types.{ArrayType, ByteType, StructField, StructType}
 import org.apache.spark.util.sketch.BloomFilter
-import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.{Disabled, Test}
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
@@ -56,8 +56,8 @@ import scala.collection.mutable
 
 class BloomFilterBufferTest {
 
-  @org.junit.jupiter.api.Test
-  @Disabled // failing, possibly WrappedArray conversion is the cause
+  @Test
+  @Disabled("failing, possibly WrappedArray conversion is the cause")
   def testNoDuplicateKeys(): Unit = {
 
     // TODO test other sizes / size categorization

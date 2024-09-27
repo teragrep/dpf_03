@@ -1,6 +1,6 @@
 /*
  * Teragrep Tokenizer DPF-03
- * Copyright (C) 2019, 2020, 2021, 2022, 2023  Suomen Kanuuna Oy
+ * Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024  Suomen Kanuuna Oy
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -48,33 +48,43 @@ package com.teragrep.functions.dpf_03;
 
 import com.teragrep.blf_01.Token;
 import com.teragrep.blf_01.Tokenizer;
-import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.api.java.UDF2;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 
-public class TokenizerUDF implements UDF1<String, List<byte[]>> {
+public class RegexTokenizerUDF implements UDF2<String, String, List<byte[]>> {
 
     private Tokenizer tokenizer = null;
+    private Pattern pattern = null;
 
     @Override
-    public List<byte[]> call(String s) throws Exception {
+    public List<byte[]> call(final String s, final String regex) {
         if (tokenizer == null) {
             // "lazy" init
             tokenizer = new Tokenizer(32);
         }
+        if (pattern == null || !pattern.pattern().equals(regex)) {
+            // "lazy" init
+            pattern = Pattern.compile(regex);
+        }
 
         // create empty Scala immutable List
-        ArrayList<byte[]> rvList = new ArrayList<>();
+        final ArrayList<byte[]> rvList = new ArrayList<>();
 
-        ByteArrayInputStream bais = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
-        List<Token> tokens = tokenizer.tokenize(bais);
+        final InputStream bais = new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
+        final List<Token> tokens = tokenizer.tokenize(bais);
 
-        for (Token token : tokens) {
-            rvList.add(token.bytes);
+        for (final Token token : tokens) {
+            if (pattern.matcher(token.toString()).matches()) {
+                rvList.add(token.bytes);
+            }
         }
 
         return rvList;
