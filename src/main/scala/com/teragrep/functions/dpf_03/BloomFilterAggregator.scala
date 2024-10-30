@@ -47,7 +47,6 @@
 package com.teragrep.functions.dpf_03
 
 import java.io.{ByteArrayOutputStream, Serializable}
-import com.teragrep.blf_01.Tokenizer
 import org.apache.spark.sql.{Encoder, Encoders, Row}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.Aggregator
@@ -61,8 +60,6 @@ class BloomFilterAggregator(final val columnName: String,
                             final val estimateName: String,
                             sortedSizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double])
   extends Aggregator[Row, BloomFilter, Array[Byte]] with Serializable {
-
-  var tokenizer: Option[Tokenizer] = None
 
   override def zero(): BloomFilter = {
     BloomFilter.create(1, 0.01)
