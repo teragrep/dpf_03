@@ -95,9 +95,10 @@ class BloomFilterAggregator(final val columnName: String,
   }
 
   /**
-   * Find best BloomFilter candidate for return
-   * @param buffer BloomFilterBuffer returned by reduce step
-   * @return best candidate by fpp being smaller than requested
+   * Write the final buffer filter into a byte array
+   *
+   * @param buffer resulting final bloom filter after aggregation process
+   * @return byte array of the final bloom filter
    */
   override def finish(buffer: BloomFilter): Array[Byte] = {
     val baos = new ByteArrayOutputStream()
