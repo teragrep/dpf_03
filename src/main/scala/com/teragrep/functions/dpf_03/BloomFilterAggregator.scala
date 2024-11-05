@@ -61,20 +61,24 @@ class BloomFilterAggregator(final val columnName: String,
                             sortedSizeMap: java.util.SortedMap[java.lang.Long, java.lang.Double])
   extends Aggregator[Row, BloomFilter, Array[Byte]] with Serializable {
 
+  private var currentEstimate: Long = sortedSizeMap.firstKey()
+
   override def zero(): BloomFilter = {
-    BloomFilter.create(1, 0.01)
+    val fpp = sortedSizeMap.get(currentEstimate)
+    BloomFilter.create(currentEstimate, fpp)
   }
 
   override def reduce(buffer: BloomFilter, row: Row): BloomFilter = {
-    var newBuffer = buffer
-    val tokens : mutable.WrappedArray[Array[Byte]] = row.getAs[mutable.WrappedArray[Array[Byte]]](columnName)
+    val tokens: Array[Array[Byte]] = row.getAs[mutable.WrappedArray[Array[Byte]]](columnName).toArray
     val estimate: Long = row.getAs[Long](estimateName)
 
-    if (newBuffer.bitSize() == 64) { // zero() will have 64 bitSize
-      newBuffer = selectFilterFromMap(estimate)
+    val newBuffer = if (currentEstimate < estimate) {
+      selectFilterFromMap(estimate)
+    } else {
+      buffer
     }
 
-    for (token : Array[Byte] <- tokens) {
+    for (token: Array[Byte] <- tokens) {
       newBuffer.putBinary(token)
     }
 
@@ -82,16 +86,12 @@ class BloomFilterAggregator(final val columnName: String,
   }
 
   override def merge(ours: BloomFilter, their: BloomFilter): BloomFilter = {
-    var reducedBuffer = ours
-
-    if (ours.bitSize() != 64 && their.bitSize() != 64) {
-      reducedBuffer = ours.mergeInPlace(their)
+    if (!ours.isCompatible(their)) {
+      // if incompatible, return the larger filter
+      return if (ours.bitSize() < their.bitSize()) their else ours
     }
-    else if (ours.bitSize() == 64) {
-      reducedBuffer = their
-    }
-
-    reducedBuffer
+    val merged = ours.mergeInPlace(their)
+    merged
   }
 
   /**
@@ -116,16 +116,21 @@ class BloomFilterAggregator(final val columnName: String,
     val sortedScalaMap = sortedSizeMap.asScala
 
     // default to largest
-    var size = sortedScalaMap.last._1
+    val keySet = sortedScalaMap.keySet
+    var selectedSize = keySet.last
 
-    for (entry <- sortedScalaMap) {
-      if (entry._1 >= estimate && entry._1 < size) {
-        size = entry._1
+    for (expectedKey <- keySet) {
+      if (estimate <= expectedKey && expectedKey < selectedSize) {
+        selectedSize = expectedKey
       }
     }
-    val fpp = sortedScalaMap.getOrElse(size,
-      throw new RuntimeException("sortedScalaMap did not contain value for key size: " + size))
+    // update global estimate size
+    currentEstimate = selectedSize
 
-    BloomFilter.create(size, fpp)
+    val fpp = sortedScalaMap.getOrElse(selectedSize,
+      throw new IllegalArgumentException("sortedScalaMap did not contain value for key size: " + selectedSize)
+    )
+
+    BloomFilter.create(selectedSize, fpp)
   }
 }

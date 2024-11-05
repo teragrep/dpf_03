@@ -66,6 +66,8 @@ class BloomFilterAggregatorTest {
     " src=127.127.127.127 dst=127.0.0.1 src_port=52362" +
     " dst_port=8151 session_id=0 reason=Traffic Denied"
 
+  val emptyString: String = ""
+
   val amount: Long = 10
 
   val testSchema: StructType = new StructType(
@@ -82,18 +84,99 @@ class BloomFilterAggregatorTest {
     )
   )
 
+  val nullEstimateSchema: StructType = new StructType(
+    Array[StructField](
+      StructField("_time", TimestampType, nullable = false, new MetadataBuilder().build),
+      StructField("_raw", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("index", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("sourcetype", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("host", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("source", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("partition", StringType, nullable = false, new MetadataBuilder().build),
+      StructField("offset", LongType, nullable = false, new MetadataBuilder().build),
+      StructField("estimate(tokens)", LongType, nullable = true, new MetadataBuilder().build)
+    )
+  )
+
+  val sparkSession: SparkSession = SparkSession.builder.master("local[*]")
+    .appName("testTokenization")
+    .getOrCreate
+  val sqlContext: SQLContext = sparkSession.sqlContext
+  sparkSession.sparkContext.setLogLevel("ERROR")
+
   @Test
   def testTokenization(): Unit = {
-    val sparkSession = SparkSession.builder.master("local[*]").getOrCreate
-    val sqlContext = sparkSession.sqlContext
-    sparkSession.sparkContext.setLogLevel("ERROR")
+    val encoder = RowEncoder.apply(testSchema)
+    val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
+    var rowDataset = rowMemoryStream.toDF
+    val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
+      put(1000L, 0.01)
+      put(10000L, 0.01)
+    }
+
+    // create Scala udf
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
+    // register udf
+    sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
+
+    // apply udf to column
+    rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
+
+    // run bloomfilter on the column
+    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", javaMap)
+    val tokenAggregatorColumn = tokenAggregator.toColumn
+
+    val aggregatedDataset = rowDataset
+      .groupBy("partition")
+      .agg(tokenAggregatorColumn)
+      .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
+
+    val streamingQuery = startStream(aggregatedDataset)
+    var run: Long = 0
+
+    while (streamingQuery.isActive) {
+      val time = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.now, ZoneOffset.UTC))
+      rowMemoryStream.addData(
+        makeRows(time, exampleString, exampleString.length.longValue()))
+
+      run += 1
+
+      if (run == 10) {
+        streamingQuery.processAllAvailable
+        streamingQuery.stop
+        streamingQuery.awaitTermination()
+      }
+    }
+
+
+    val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
+
+    assert(resultCollected.length == 10)
+
+    var loops = 0;
+    for (row <- resultCollected) {
+      val bfArray = row.getAs[Array[Byte]]("bloomfilter")
+      val bais = new ByteArrayInputStream(bfArray)
+      val resBf = BloomFilter.readFrom(bais)
+      assert(resBf.mightContain("127.127"))
+      assert(resBf.mightContain("service=tcp/port:8151"))
+      assert(resBf.mightContain("duration="))
+      assert(!resBf.mightContain("fox"))
+      loops = loops+1
+    }
+    assert(loops == 10)
+  }
+
+  @Test
+  def testFilterSizeSelection(): Unit = {
     val encoder = RowEncoder.apply(testSchema)
     val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
 
     var rowDataset = rowMemoryStream.toDF
     val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
+      put(10L, 0.01)
       put(1000L, 0.01)
-      put(10000L, 0.01)
+      put(5000L, 0.01)
     }
 
 
@@ -120,7 +203,7 @@ class BloomFilterAggregatorTest {
     while (streamingQuery.isActive) {
       val time = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.now, ZoneOffset.UTC))
       rowMemoryStream.addData(
-        makeRows(time, String.valueOf(run)))
+        makeRows(time, exampleString, 500L))
 
       run += 1
 
@@ -131,59 +214,181 @@ class BloomFilterAggregatorTest {
       }
     }
 
+
     val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
 
     assert(resultCollected.length == 10)
 
+    var loops = 0
     for (row <- resultCollected) {
       val bfArray = row.getAs[Array[Byte]]("bloomfilter")
       val bais = new ByteArrayInputStream(bfArray)
       val resBf = BloomFilter.readFrom(bais)
+      // test correct estimated size is selected
+      assert(resBf.bitSize() == BloomFilter.create(1000L, 0.01).bitSize())
+      // test tokens are not present
       assert(resBf.mightContain("127.127"))
       assert(resBf.mightContain("service=tcp/port:8151"))
       assert(resBf.mightContain("duration="))
       assert(!resBf.mightContain("fox"))
+      loops = loops + 1
     }
+    assert(loops == 10)
   }
 
-  private def makeRows(time: Timestamp, partition: String): Seq[Row] = {
+  @Test
+  def testEmptyFilter(): Unit = {
+    val encoder = RowEncoder.apply(testSchema)
+    val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
+
+    var rowDataset = rowMemoryStream.toDF
+    val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
+      put(10L, 0.01)
+      put(1000L, 0.01)
+      put(5000L, 0.01)
+    }
+
+    // create Scala udf
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
+    // register udf
+    sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
+
+    // apply udf to column
+    rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
+
+    // run bloomfilter on the column
+    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", javaMap)
+    val tokenAggregatorColumn = tokenAggregator.toColumn
+
+    val aggregatedDataset = rowDataset
+      .groupBy("partition")
+      .agg(tokenAggregatorColumn)
+      .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
+
+    val streamingQuery = startStream(aggregatedDataset)
+    var run: Long = 0
+
+    while (streamingQuery.isActive) {
+      val time = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.now, ZoneOffset.UTC))
+      rowMemoryStream.addData(
+        makeRows(time, emptyString, emptyString.length.longValue()))
+
+      run += 1
+
+      if (run == 10) {
+        streamingQuery.processAllAvailable
+        streamingQuery.stop
+        streamingQuery.awaitTermination()
+      }
+    }
+
+
+    val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
+
+    assert(resultCollected.length == 10)
+
+    var loops = 0
+    for (row <- resultCollected) {
+      val bfArray = row.getAs[Array[Byte]]("bloomfilter")
+      val bais = new ByteArrayInputStream(bfArray)
+      val resBf = BloomFilter.readFrom(bais)
+      assert(resBf.bitSize() == BloomFilter.create(10L, 0.01).bitSize())
+      // bitsize of aggregator zero() filter buffer
+      assert(resBf.bitSize() != 64)
+      loops = loops + 1
+    }
+    assert(loops == 10)
+  }
+
+  @Test
+  def testNullEstimateField(): Unit = {
+    val encoder = RowEncoder.apply(nullEstimateSchema)
+    val rowMemoryStream = new MemoryStream[Row](1,sqlContext)(encoder)
+
+    var rowDataset = rowMemoryStream.toDF
+    val javaMap = new java.util.TreeMap[java.lang.Long, java.lang.Double]() {
+      put(10L, 0.01)
+      put(1000L, 0.01)
+      put(5000L, 0.01)
+    }
+
+    // create Scala udf
+    val tokenizerUDF = functions.udf(new TokenizerUDF, DataTypes.createArrayType(DataTypes.BinaryType, false))
+    // register udf
+    sparkSession.udf.register("tokenizer_udf", tokenizerUDF)
+
+    // apply udf to column
+    rowDataset = rowDataset.withColumn("tokens", tokenizerUDF.apply(functions.col("_raw")))
+
+    // run bloomfilter on the column
+    val tokenAggregator = new BloomFilterAggregator("tokens", "estimate(tokens)", javaMap)
+    val tokenAggregatorColumn = tokenAggregator.toColumn
+
+    val aggregatedDataset = rowDataset
+      .groupBy("partition")
+      .agg(tokenAggregatorColumn)
+      .withColumnRenamed("BloomFilterAggregator(org.apache.spark.sql.Row)", "bloomfilter")
+
+    val streamingQuery = startStream(aggregatedDataset)
+    var run: Long = 0
+
+    while (streamingQuery.isActive) {
+      val time = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.now, ZoneOffset.UTC))
+      rowMemoryStream.addData(
+        makeRows(time, emptyString, -1L))
+
+      run += 1
+
+      if (run == 10) {
+        streamingQuery.processAllAvailable
+        streamingQuery.stop
+        streamingQuery.awaitTermination()
+      }
+    }
+
+
+    val resultCollected = sqlContext.sql("SELECT bloomfilter FROM TokenAggregatorQuery").collect()
+
+    assert(resultCollected.length == 10)
+
+    var loops = 0
+    for (row <- resultCollected) {
+      val bfArray = row.getAs[Array[Byte]]("bloomfilter")
+      val bais = new ByteArrayInputStream(bfArray)
+      val resBf = BloomFilter.readFrom(bais)
+      // should select the smallest filter if the estimate is null
+      assert(resBf.bitSize() == BloomFilter.create(10L, 0.01).bitSize())
+      loops = loops + 1
+    }
+    assert(loops == 10)
+  }
+
+  private def makeRows(time: Timestamp, rawString: String, estimate: Long): Seq[Row] = {
 
     val rowList: ArrayBuffer[Row] = new ArrayBuffer[Row]
-    val rowData = generateRawData()
-
     for (i <- 0 until amount.toInt) {
       val row = Row(
         time,
-        exampleString,
+        rawString,
         "topic",
         "stream",
         "host",
         "input",
         i.toString,
         0L,
-        exampleString.length.toLong)
+        if (estimate < 0) null else estimate // if negative value set estimate to null
+      )
 
       rowList += row
     }
     rowList
   }
 
-  private def generateRawData(): Array[String] = {
-    val testDataList = new Array[String](amount.toInt)
-
-    for (i <- testDataList.indices) {
-      val randomVal = Math.floor(Math.random() * 999)
-      val text = "ip=172.17.255."+randomVal+",port=8080,session_id=46889"
-      testDataList.update(i, text)
-
-    }
-    testDataList
-  }
-
-  private def startStream(rowDataset: Dataset[Row]): StreamingQuery =
+  private def startStream(rowDataset: Dataset[Row]): StreamingQuery = {
     rowDataset.writeStream.queryName("TokenAggregatorQuery")
       .outputMode("complete")
       .format("memory")
       .trigger(Trigger.ProcessingTime(0L))
       .start
+  }
 }
