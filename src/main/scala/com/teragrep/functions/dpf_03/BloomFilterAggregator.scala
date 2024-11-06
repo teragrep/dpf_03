@@ -86,12 +86,13 @@ class BloomFilterAggregator(final val columnName: String,
   }
 
   override def merge(ours: BloomFilter, their: BloomFilter): BloomFilter = {
-    if (!ours.isCompatible(their)) {
+    val result = if (!ours.isCompatible(their)) {
       // if incompatible, return the larger filter
-      return if (ours.bitSize() < their.bitSize()) their else ours
+      if (ours.bitSize() < their.bitSize()) their else ours
+    } else {
+      ours.mergeInPlace(their)
     }
-    val merged = ours.mergeInPlace(their)
-    merged
+    result
   }
 
   /**
